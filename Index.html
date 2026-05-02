@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="FitTracker">
+  <title>FitTracker</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box !important; margin: 0; padding: 0; }
+    body, html { overflow-x: hidden !important; width: 100%; background: #f3f4f6; -webkit-text-size-adjust: 100%; }
+    input, select, textarea, button { font-size: 16px !important; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    ::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+const DB = {
+get: async (k) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } },
+set: async (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+
+/* ── CONSTANTEN ── */
+const PROFIELEN = [
+{ id: “ferro”, naam: “Ferro”, emoji: “💪”, kleur: “#22c55e” },
+{ id: “partner”, naam: “Mijn vrouw”, emoji: “🌸”, kleur: “#f472b6” },
+];
+const MAALTIJDEN = [“Ontbijt”, “Snacks na ontbijt”, “Lunch”, “Snacks na lunch”, “Avondeten”, “Snacks na avondeten”];
+const METINGEN = [“gewicht”, “buik”, “heup”, “borst”, “taille”, “arm”];
+const M_LBL = { gewicht: “Gewicht”, buik: “Buikomvang”, heup: “Heupomvang”, borst: “Borstomvang”, taille: “Tailleomvang”, arm: “Armomvang” };
+const M_UNIT = { gewicht: “kg”, buik: “cm”, heup: “cm”, borst: “cm”, taille: “cm”, arm: “cm” };
+const DEF_DOEL = { kcal: 1500, eiwit: 120, koolhydraten: 150, vet: 50 };
+const DAGEN = [“zo”,“ma”,“di”,“wo”,“do”,“vr”,“za”];
+
+/* ── PRODUCTENDATABASE ── */
+const PRODUCTEN = [
+// KWARK & ZUIVEL (waarden per 100g, geverifieerd)
+{ naam:“Magere kwark AH”, kcal:57, eiwit:10, koolhydraten:4.2, vet:0.2, portie:{label:“100g”,gram:100} },
+{ naam:“Magere kwark Campina”, kcal:57, eiwit:9.8, koolhydraten:4.1, vet:0.2, portie:{label:“100g”,gram:100} },
+{ naam:“Verse magere kwark De Zaanse Hoeve”, kcal:56, eiwit:9.5, koolhydraten:4.0, vet:0.2, portie:{label:“100g”,gram:100} },
+{ naam:“Skyr naturel Arla”, kcal:63, eiwit:11, koolhydraten:4.0, vet:0.2, portie:{label:“150g”,gram:150} },
+{ naam:“Skyr vanille 0% fat Arla”, kcal:66, eiwit:10, koolhydraten:6.5, vet:0.2, portie:{label:“150g”,gram:150} },
+{ naam:“Skyr aardbei Arla”, kcal:68, eiwit:10, koolhydraten:7.5, vet:0.2, portie:{label:“150g”,gram:150} },
+{ naam:“Protein kwark met yoghurt framboos Melkunie”, kcal:72, eiwit:12, koolhydraten:5.0, vet:0.5, portie:{label:“knijpzakje 200g”,gram:200} },
+{ naam:“Protein pudding choco Melkunie”, kcal:83, eiwit:11.6, koolhydraten:6.5, vet:1.2, portie:{label:“bakje 200g”,gram:200} },
+{ naam:“Griekse yoghurt 0% vet”, kcal:57, eiwit:10, koolhydraten:3.6, vet:0.4, portie:{label:“150g”,gram:150} },
+{ naam:“Griekse yoghurt 2% Fage”, kcal:73, eiwit:9, koolhydraten:4, vet:2, portie:{label:“150g”,gram:150} },
+{ naam:“Cottage cheese Zuivelhoeve”, kcal:85, eiwit:11, koolhydraten:3.5, vet:3, portie:{label:“100g”,gram:100} },
+{ naam:“Cottage cheese light”, kcal:72, eiwit:12, koolhydraten:3.5, vet:1, portie:{label:“100g”,gram:100} },
+{ naam:“Ricotta”, kcal:154, eiwit:11, koolhydraten:3, vet:11, portie:{label:“100g”,gram:100} },
+{ naam:“Melk halfvol”, kcal:46, eiwit:3.3, koolhydraten:4.7, vet:1.6, portie:{label:“glas 200ml”,gram:200} },
+{ naam:“Melk mager”, kcal:34, eiwit:3.4, koolhydraten:4.9, vet:0.1, portie:{label:“glas 200ml”,gram:200} },
+{ naam:“Kookroom light AH”, kcal:99, eiwit:2.5, koolhydraten:4, vet:8, portie:{label:“50ml”,gram:50} },
+// KAAS & SMEERBAAR
+{ naam:“Kaas 30+ plak”, kcal:261, eiwit:30, koolhydraten:0, vet:15, portie:{label:“plak 20g”,gram:20} },
+{ naam:“Kaas 48+ plak”, kcal:356, eiwit:24, koolhydraten:0, vet:29, portie:{label:“plak 20g”,gram:20} },
+{ naam:“Smeerkaas 20+ AH”, kcal:145, eiwit:10, koolhydraten:4, vet:10, portie:{label:“broodsmeer 15g”,gram:15} },
+{ naam:“Philadelphia light”, kcal:145, eiwit:8, koolhydraten:4, vet:11, portie:{label:“broodsmeer 15g”,gram:15} },
+{ naam:“Kerry Gold ongezouten boter”, kcal:744, eiwit:0.6, koolhydraten:0.5, vet:82, portie:{label:“broodsmeer 10g”,gram:10} },
+{ naam:“Becel light”, kcal:353, eiwit:0.1, koolhydraten:0.5, vet:38, portie:{label:“broodsmeer 10g”,gram:10} },
+{ naam:“Pindakaas”, kcal:602, eiwit:25, koolhydraten:20, vet:49, portie:{label:“eetlepel 15g”,gram:15} },
+{ naam:“Mozzarella light”, kcal:170, eiwit:18, koolhydraten:2, vet:10, portie:{label:“bol 125g”,gram:125} },
+{ naam:“Feta”, kcal:264, eiwit:14, koolhydraten:0, vet:23, portie:{label:“blokje 30g”,gram:30} },
+{ naam:“Hummus naturel”, kcal:166, eiwit:8, koolhydraten:14, vet:9, portie:{label:“eetlepel 30g”,gram:30} },
+// BROOD & GRANEN
+{ naam:“Volkoren brood AH snee”, kcal:218, eiwit:9, koolhydraten:38, vet:2.5, portie:{label:“snee 35g”,gram:35} },
+{ naam:“Wit brood snee”, kcal:267, eiwit:8, koolhydraten:52, vet:2.5, portie:{label:“snee 30g”,gram:30} },
+{ naam:“Volkoren bol AH”, kcal:247, eiwit:9, koolhydraten:44, vet:3, portie:{label:“bol 60g”,gram:60} },
+{ naam:“Bruine bol”, kcal:247, eiwit:9, koolhydraten:44, vet:3, portie:{label:“bol 60g”,gram:60} },
+{ naam:“Pita volkoren”, kcal:245, eiwit:9, koolhydraten:45, vet:2, portie:{label:“pita 60g”,gram:60} },
+{ naam:“Wrap volkoren”, kcal:283, eiwit:8, koolhydraten:45, vet:7, portie:{label:“wrap 60g”,gram:60} },
+{ naam:“Havermout”, kcal:369, eiwit:12.5, koolhydraten:60, vet:7, portie:{label:“portie 50g”,gram:50} },
+{ naam:“All-Bran Fruit n Fibre”, kcal:342, eiwit:9, koolhydraten:67, vet:3, portie:{label:“portie 40g”,gram:40} },
+{ naam:“Volkoren pasta gekookt”, kcal:124, eiwit:5, koolhydraten:23, vet:1, portie:{label:“portie 180g”,gram:180} },
+{ naam:“Pasta gekookt”, kcal:131, eiwit:5, koolhydraten:26, vet:0.9, portie:{label:“portie 180g”,gram:180} },
+{ naam:“Zilvervliesrijst Jumbo droog”, kcal:361, eiwit:7.5, koolhydraten:76, vet:2.7, portie:{label:“droog 70g”,gram:70} },
+{ naam:“Basmati rijst droog”, kcal:357, eiwit:7, koolhydraten:78, vet:1, portie:{label:“droog 70g”,gram:70} },
+{ naam:“Quinoa gekookt”, kcal:120, eiwit:4.4, koolhydraten:22, vet:1.9, portie:{label:“portie 150g”,gram:150} },
+{ naam:“Couscous gekookt”, kcal:112, eiwit:3.8, koolhydraten:23, vet:0.6, portie:{label:“portie 150g”,gram:150} },
+// KIP
+{ naam:“Kipfilet rauw”, kcal:106, eiwit:23, koolhydraten:0, vet:1.5, portie:{label:“filet 150g”,gram:150} },
+{ naam:“Kipfilet gebakken”, kcal:153, eiwit:30, koolhydraten:0, vet:3.5, portie:{label:“filet 150g”,gram:150} },
+{ naam:“Kipfilet vleeswaar plak”, kcal:101, eiwit:21, koolhydraten:1.2, vet:1.5, portie:{label:“plakje 15g”,gram:15} },
+{ naam:“Kipfilet gerookt plak”, kcal:109, eiwit:21, koolhydraten:1.5, vet:2.5, portie:{label:“plakje 15g”,gram:15} },
+{ naam:“Kip shoarma”, kcal:155, eiwit:22, koolhydraten:2, vet:6, portie:{label:“portie 100g”,gram:100} },
+{ naam:“Kalkoenfilet vleeswaar plak”, kcal:100, eiwit:22, koolhydraten:0.5, vet:1, portie:{label:“plakje 15g”,gram:15} },
+{ naam:“Vega stukjes kip Vivera”, kcal:120, eiwit:17, koolhydraten:6, vet:3, portie:{label:“portie 75g”,gram:75} },
+// RUND & VARKEN
+{ naam:“Runder tartaar mager AH”, kcal:121, eiwit:20, koolhydraten:0, vet:4.5, portie:{label:“stuk 150g”,gram:150} },
+{ naam:“Rundergehakt 5% vet”, kcal:131, eiwit:21, koolhydraten:0, vet:5, portie:{label:“portie 100g”,gram:100} },
+{ naam:“Serranoham plak”, kcal:143, eiwit:28, koolhydraten:0.3, vet:3, portie:{label:“plakje 15g”,gram:15} },
+{ naam:“Parmaham plak”, kcal:145, eiwit:27, koolhydraten:0, vet:4, portie:{label:“plakje 15g”,gram:15} },
+{ naam:“Rosbief mager plak”, kcal:120, eiwit:23, koolhydraten:0, vet:3, portie:{label:“plakje 15g”,gram:15} },
+{ naam:“Ham gekookt plak”, kcal:107, eiwit:18, koolhydraten:1, vet:3.5, portie:{label:“plakje 20g”,gram:20} },
+{ naam:“Rookvlees plak”, kcal:105, eiwit:20, koolhydraten:1, vet:2, portie:{label:“plakje 15g”,gram:15} },
+// VIS
+{ naam:“Zalm filet”, kcal:208, eiwit:20, koolhydraten:0, vet:13.5, portie:{label:“filet 150g”,gram:150} },
+{ naam:“Gerookte zalm”, kcal:163, eiwit:19, koolhydraten:0, vet:10, portie:{label:“plakje 30g”,gram:30} },
+{ naam:“Tonijn in water blik”, kcal:86, eiwit:19.5, koolhydraten:0, vet:0.8, portie:{label:“blik uitgelekt 130g”,gram:130} },
+{ naam:“Tonijn in water Rio Mare”, kcal:103, eiwit:23, koolhydraten:0, vet:1, portie:{label:“blik 160g”,gram:160} },
+{ naam:“Makreel in tomatensaus blik”, kcal:130, eiwit:15, koolhydraten:4, vet:6, portie:{label:“blik 125g”,gram:125} },
+{ naam:“Kabeljauw filet”, kcal:82, eiwit:18, koolhydraten:0, vet:0.7, portie:{label:“filet 150g”,gram:150} },
+{ naam:“Garnalen”, kcal:85, eiwit:18, koolhydraten:0, vet:1, portie:{label:“portie 100g”,gram:100} },
+// EIEREN
+{ naam:“Ei groot”, kcal:155, eiwit:12.6, koolhydraten:0.7, vet:11, portie:{label:“ei groot 63g”,gram:63} },
+{ naam:“Ei medium”, kcal:155, eiwit:12.6, koolhydraten:0.7, vet:11, portie:{label:“ei medium 53g”,gram:53} },
+{ naam:“Eiwitten vloeibaar”, kcal:47, eiwit:10.8, koolhydraten:0.7, vet:0.2, portie:{label:“100ml”,gram:100} },
+// DIEPVRIES FRUIT
+{ naam:“Diepvries blauwebessen AH”, kcal:57, eiwit:0.7, koolhydraten:14, vet:0.3, portie:{label:“portie 100g”,gram:100} },
+{ naam:“Diepvries aardbeien AH”, kcal:32, eiwit:0.7, koolhydraten:7.7, vet:0.3, portie:{label:“portie 150g”,gram:150} },
+{ naam:“Diepvries mango stukjes AH”, kcal:57, eiwit:0.5, koolhydraten:14, vet:0.2, portie:{label:“portie 100g”,gram:100} },
+{ naam:“Diepvries zomerfruit AH”, kcal:40, eiwit:0.8, koolhydraten:9, vet:0.3, portie:{label:“portie 100g”,gram:100} },
+{ naam:“Diepvries frambozen”, kcal:52, eiwit:1.2, koolhydraten:12, vet:0.7, portie:{label:“portie 100g”,gram:100} },
+// DIEPVRIES GROENTEN
+{ naam:“Diepvries spinazie”, kcal:23, eiwit:2.9, koolhydraten:1.4, vet:0.4, portie:{label:“portie 150g”,gram:150} },
+{ naam:“Diepvries edamame”, kcal:121, eiwit:11, koolhydraten:8, vet:5, portie:{label:“portie 100g”,gram:100} },
+{ naam:“Diepvries broccoli”, kcal:28, eiwit:3, koolhydraten:4, vet:0.4, portie:{label:“portie 150g”,gram:150} },
+// AVIKO
+{ naam:“Aviko Superfriet”, kcal:143, eiwit:1.8, koolhydraten:26, vet:3.8, portie:{label:“portie 150g”,gram:150} },
+{ naam:“Aviko Superfriet slank”, kcal:109, eiwit:1.8, koolhydraten:22, vet:1.5, portie:{label:“portie 150g”,gram:150} },
+{ naam:“Aviko Crispy Crowns”, kcal:196, eiwit:2.2, koolhydraten:27, vet:8.5, portie:{label:“portie 150g”,gram:150} },
+{ naam:“Aviko Wedges”, kcal:155, eiwit:2.5, koolhydraten:28, vet:4, portie:{label:“portie 150g”,gram:150} },
+{ naam:“Aviko Krieltjes”, kcal:80, eiwit:1.8, koolhydraten:17, vet:0.5, portie:{label:“portie 150g”,gram:150} },
+// GROENTEN VERS
+{ naam:“Komkommer”, kcal:15, eiwit:0.6, koolhydraten:3.6, vet:0.1, portie:{label:“100g”,gram:100} },
+{ naam:“Tomaat”, kcal:18, eiwit:0.9, koolhydraten:3.5, vet:0.2, portie:{label:“tomaat 80g”,gram:80} },
+{ naam:“Snoeptomaatjes AH”, kcal:18, eiwit:0.9, koolhydraten:3.5, vet:0.2, portie:{label:“stuk 15g”,gram:15} },
+{ naam:“Rode paprika”, kcal:31, eiwit:1, koolhydraten:6, vet:0.3, portie:{label:“halve 75g”,gram:75} },
+{ naam:“Slamix”, kcal:15, eiwit:1.3, koolhydraten:2, vet:0.2, portie:{label:“portie 50g”,gram:50} },
+{ naam:“Spinazie vers”, kcal:23, eiwit:2.9, koolhydraten:1.4, vet:0.4, portie:{label:“portie 100g”,gram:100} },
+{ naam:“Bloemkool”, kcal:23, eiwit:2, koolhydraten:4, vet:0.3, portie:{label:“portie 150g”,gram:150} },
+{ naam:“Broccoli”, kcal:28, eiwit:3, koolhydraten:4, vet:0.4, portie:{label:“portie 150g”,gram:150} },
+{ naam:“Rode ui”, kcal:40, eiwit:1.1, koolhydraten:9, vet:0.1, portie:{label:“halve ui 50g”,gram:50} },
+{ naam:“Avocado”, kcal:160, eiwit:2, koolhydraten:9, vet:15, portie:{label:“halve 75g”,gram:75} },
+{ naam:“Mais blik”, kcal:86, eiwit:3.2, koolhydraten:19, vet:1.2, portie:{label:“portie 80g”,gram:80} },
+{ naam:“Champignons”, kcal:22, eiwit:3.1, koolhydraten:3.3, vet:0.3, portie:{label:“portie 100g”,gram:100} },
+{ naam:“Nasi bami groenten”, kcal:25, eiwit:1.5, koolhydraten:4, vet:0.3, portie:{label:“portie 100g”,gram:100} },
+{ naam:“Aardappelen gekookt”, kcal:77, eiwit:2, koolhydraten:17, vet:0.1, portie:{label:“portie 200g”,gram:200} },
+{ naam:“Zoete aardappel”, kcal:86, eiwit:1.6, koolhydraten:20, vet:0.1, portie:{label:“portie 150g”,gram:150} },
+{ naam:“Krieltjes AH”, kcal:69, eiwit:1.8, koolhydraten:15, vet:0.1, portie:{label:“portie 150g”,gram:150} },
+{ naam:“Courgette”, kcal:17, eiwit:1.2, koolhydraten:3.1, vet:0.3, portie:{label:“portie 150g”,gram:150} },
+// FRUIT VERS
+{ naam:“Banaan”, kcal:89, eiwit:1.1, koolhydraten:23, vet:0.3, portie:{label:“banaan 120g”,gram:120} },
+{ naam:“Appel”, kcal:52, eiwit:0.3, koolhydraten:14, vet:0.2, portie:{label:“appel 150g”,gram:150} },
+{ naam:“Sinaasappel”, kcal:47, eiwit:0.9, koolhydraten:12, vet:0.1, portie:{label:“sinaasappel 150g”,gram:150} },
+{ naam:“Kiwi”, kcal:61, eiwit:1.1, koolhydraten:15, vet:0.5, portie:{label:“kiwi 75g”,gram:75} },
+{ naam:“Blauwebessen”, kcal:57, eiwit:0.7, koolhydraten:14, vet:0.3, portie:{label:“portie 100g”,gram:100} },
+{ naam:“Aardbeien”, kcal:32, eiwit:0.7, koolhydraten:7.7, vet:0.3, portie:{label:“portie 150g”,gram:150} },
+{ naam:“Mango”, kcal:60, eiwit:0.8, koolhydraten:15, vet:0.4, portie:{label:“portie 100g”,gram:100} },
+// PEULVRUCHTEN
+{ naam:“Kikkererwten blik”, kcal:119, eiwit:7, koolhydraten:18, vet:2.6, portie:{label:“portie 130g”,gram:130} },
+{ naam:“Linzen”, kcal:116, eiwit:9, koolhydraten:20, vet:0.4, portie:{label:“portie 150g”,gram:150} },
+{ naam:“Edamame”, kcal:121, eiwit:11, koolhydraten:8, vet:5, portie:{label:“portie 100g”,gram:100} },
+// EIWITTEN & SPORT
+{ naam:“Impact Whey Protein Myprotein”, kcal:384, eiwit:74.5, koolhydraten:8.5, vet:7.5, portie:{label:“scoop 25g”,gram:25} },
+{ naam:“Caseine proteine poeder”, kcal:370, eiwit:78, koolhydraten:5, vet:2, portie:{label:“scoop 30g”,gram:30} },
+{ naam:“Protein knijp mango Melkunie”, kcal:70, eiwit:12, koolhydraten:5, vet:0.5, portie:{label:“pakje 130g”,gram:130} },
+{ naam:“Barebells Protein Bar”, kcal:196, eiwit:20, koolhydraten:20, vet:6, portie:{label:“reep 55g”,gram:55} },
+{ naam:“Quest Protein Bar”, kcal:190, eiwit:20, koolhydraten:23, vet:7, portie:{label:“reep 60g”,gram:60} },
+// SAUZEN & KRUIDEN
+{ naam:“Olijfolie”, kcal:828, eiwit:0, koolhydraten:0, vet:92, portie:{label:“eetlepel 10g”,gram:10} },
+{ naam:“Sojasaus”, kcal:53, eiwit:8, koolhydraten:5, vet:0, portie:{label:“eetlepel 15ml”,gram:15} },
+{ naam:“Ketjap manis”, kcal:160, eiwit:4, koolhydraten:38, vet:0, portie:{label:“eetlepel 15ml”,gram:15} },
+{ naam:“Ketchup Heinz”, kcal:101, eiwit:1.5, koolhydraten:25, vet:0.1, portie:{label:“eetlepel 15g”,gram:15} },
+{ naam:“Shoarmasaus Yildriz”, kcal:237, eiwit:1.2, koolhydraten:7, vet:22, portie:{label:“eetlepel 15g”,gram:15} },
+{ naam:“Pesto groen”, kcal:430, eiwit:5, koolhydraten:4, vet:44, portie:{label:“eetlepel 15g”,gram:15} },
+{ naam:“Honing”, kcal:304, eiwit:0.3, koolhydraten:82, vet:0, portie:{label:“theelepel 10g”,gram:10} },
+{ naam:“Knoflookteen”, kcal:149, eiwit:6.4, koolhydraten:33, vet:0.5, portie:{label:“teen 5g”,gram:5} },
+// NOTEN & SNACKS
+{ naam:“Amandelen”, kcal:579, eiwit:21, koolhydraten:22, vet:50, portie:{label:“handjevol 25g”,gram:25} },
+{ naam:“Notenmix ongezouten AH”, kcal:580, eiwit:18, koolhydraten:12, vet:52, portie:{label:“handjevol 25g”,gram:25} },
+{ naam:“Lindt Excellence 70%”, kcal:530, eiwit:8, koolhydraten:42, vet:37, portie:{label:“stukje 10g”,gram:10} },
+{ naam:“Rijstwafel”, kcal:387, eiwit:7, koolhydraten:82, vet:2, portie:{label:“wafel 10g”,gram:10} },
+{ naam:“Patat friet”, kcal:312, eiwit:3.4, koolhydraten:41, vet:15, portie:{label:“portie 150g”,gram:150} },
+{ naam:“Granola”, kcal:440, eiwit:10, koolhydraten:62, vet:18, portie:{label:“portie 45g”,gram:45} },
+{ naam:“Chiazaad”, kcal:486, eiwit:17, koolhydraten:42, vet:31, portie:{label:“eetlepel 10g”,gram:10} },
+// DRANKEN
+{ naam:“Droge witte wijn”, kcal:82, eiwit:0.1, koolhydraten:2.6, vet:0, portie:{label:“glas 150ml”,gram:150} },
+{ naam:“Rode wijn”, kcal:85, eiwit:0.1, koolhydraten:2.6, vet:0, portie:{label:“glas 150ml”,gram:150} },
+{ naam:“Sinaasappelsap vers”, kcal:45, eiwit:0.7, koolhydraten:10, vet:0.2, portie:{label:“glas 200ml”,gram:200} },
+// TOMATEN & CONSERVEN
+{ naam:“Tomatenblokjes blik AH”, kcal:18, eiwit:1, koolhydraten:3.5, vet:0.2, portie:{label:“blik 400g”,gram:400} },
+{ naam:“Tomatenpuree”, kcal:38, eiwit:1.7, koolhydraten:7, vet:0.3, portie:{label:“eetlepel 15g”,gram:15} },
+];
+
+/* ── HELPERS ── */
+const vandaag = () => new Date().toISOString().slice(0,10);
+const fmtDag = (d) => {
+const dt = new Date(d + “T12:00:00”);
+return { dag: DAGEN[dt.getDay()], num: dt.getDate(), mnd: dt.toLocaleString(“nl-NL”,{month:“short”}) };
+};
+const week7 = () => { const a=[],n=new Date(); for(let i=-3;i<=3;i++){const d=new Date(n);d.setDate(n.getDate()+i);a.push(d.toISOString().slice(0,10));} return a; };
+const dagen14 = () => { const a=[],n=new Date(); for(let i=0;i<14;i++){const d=new Date(n);d.setDate(n.getDate()+i);a.push(d.toISOString().slice(0,10));} return a; };
+const calc = (base, gram) => ({ kcal:Math.round(base.kcal*gram/100), eiwit:Math.round(base.eiwit*gram/100), koolhydraten:Math.round(base.koolhydraten*gram/100), vet:Math.round(base.vet*gram/100) });
+
+function productEmoji(naam) {
+const n = naam.toLowerCase();
+if (n.includes(“kwark”)||n.includes(“skyr”)||n.includes(“yoghurt”)||n.includes(“cottage”)) return “🥛”;
+if (n.includes(“ei”)&&!n.includes(“eiwit”)&&!n.includes(“eieren”)) return “🥚”;
+if (n.includes(“kip”)) return “🍗”;
+if (n.includes(“zalm”)||n.includes(“tonijn”)||n.includes(“makreel”)||n.includes(“kabeljauw”)||n.includes(“garnalen”)) return “🐟”;
+if (n.includes(“banaan”)) return “🍌”;
+if (n.includes(“appel”)) return “🍎”;
+if (n.includes(“aardbei”)) return “🍓”;
+if (n.includes(“blauwe”)||n.includes(“bosbes”)||n.includes(“frambozen”)) return “🫐”;
+if (n.includes(“mango”)||n.includes(“ananas”)) return “🥭”;
+if (n.includes(“avocado”)) return “🥑”;
+if (n.includes(“brood”)||n.includes(“bol”)||n.includes(“pistolet”)||n.includes(“pita”)||n.includes(“wrap”)) return “🍞”;
+if (n.includes(“pasta”)) return “🍝”;
+if (n.includes(“rijst”)||n.includes(“nasi”)) return “🍚”;
+if (n.includes(“sla”)||n.includes(“salade”)||n.includes(“spinazie”)) return “🥗”;
+if (n.includes(“tomaat”)) return “🍅”;
+if (n.includes(“paprika”)) return “🫑”;
+if (n.includes(“broccoli”)||n.includes(“bloemkool”)) return “🥦”;
+if (n.includes(“aardappel”)||n.includes(“friet”)||n.includes(“aviko”)) return “🥔”;
+if (n.includes(“kaas”)||n.includes(“mozzarella”)||n.includes(“feta”)) return “🧀”;
+if (n.includes(“chocolade”)||n.includes(“lindt”)) return “🍫”;
+if (n.includes(“noten”)||n.includes(“amandel”)) return “🥜”;
+if (n.includes(“honing”)) return “🍯”;
+if (n.includes(“wijn”)) return “🍷”;
+if (n.includes(“runder”)||n.includes(“biefstuk”)||n.includes(“gehakt”)) return “🥩”;
+if (n.includes(“ham”)||n.includes(“serranoham”)||n.includes(“rookvlees”)||n.includes(“rosbief”)) return “🥓”;
+if (n.includes(“protein”)||n.includes(“whey”)||n.includes(“caseine”)) return “💪”;
+if (n.includes(“havermout”)||n.includes(“granola”)) return “🥣”;
+return “🍽”;
+}
+
+/* ── APP STATE HOOK ── */
+function useAppState() {
+const [logs, setLogs] = useState({});
+const [trainingen, setTrain] = useState({});
+const [progressie, setProg] = useState({ ferro:[], partner:[] });
+const [doelen, setDoelen] = useState({ ferro:{…DEF_DOEL}, partner:{…DEF_DOEL} });
+const [bibl, setBibl] = useState([]);
+const [klaar, setKlaar] = useState(false);
+
+useEffect(() => {
+Promise.all([DB.get(“ft_logs”),DB.get(“ft_train”),DB.get(“ft_prog”),DB.get(“ft_doelen”),DB.get(“ft_bibl”)])
+.then(([l,t,p,d,b]) => {
+if(l) setLogs(l); if(t) setTrain(t); if(p) setProg(p); if(d) setDoelen(d); if(b) setBibl(b);
+setKlaar(true);
+});
+}, []);
+
+const updLog = (pid, datum, fn) => setLogs(prev => {
+const k = pid+”*”+datum;
+const u = {…prev, [k]: fn(prev[k]||{})};
+DB.set(“ft_logs”, u); return u;
+});
+const updTrain = (pid, datum, fn) => setTrain(prev => {
+const k = pid+”*”+datum;
+const u = {…prev, [k]: fn(prev[k]||[])};
+DB.set(“ft_train”, u); return u;
+});
+const updProg = (pid, fn) => setProg(prev => {
+const u = {…prev, [pid]: fn(prev[pid]||[])};
+DB.set(“ft_prog”, u); return u;
+});
+const updDoel = (pid, d) => setDoelen(prev => {
+const u = {…prev, [pid]: d}; DB.set(“ft_doelen”, u); return u;
+});
+const addBibl = (p) => setBibl(prev => {
+if(prev.find(x=>x.naam.toLowerCase()===p.naam.toLowerCase())) return prev;
+const u = [p,…prev].slice(0,300); DB.set(“ft_bibl”, u); return u;
+});
+
+return { logs, trainingen, progressie, doelen, bibl, klaar, updLog, updTrain, updProg, updDoel, addBibl };
+}
+
+/* ── UI COMPONENTS ── */
+function Overlay({ children }) {
+return (
+<div style={{ position:“fixed”, top:0, left:0, width:“100%”, height:“100%”, background:“rgba(0,0,0,0.55)”, zIndex:100, display:“flex”, flexDirection:“column”, justifyContent:“flex-end”, overflow:“hidden” }}>
+<div style={{ width:“100%”, overflow:“hidden” }}>{children}</div>
+</div>
+);
+}
+function Sheet({ children }) {
+return (
+<div style={{ background:”#fff”, borderRadius:“20px 20px 0 0”, maxHeight:“92vh”, overflowY:“auto”, overflowX:“hidden”, paddingBottom:32, width:“100%”, boxSizing:“border-box” }}>
+{children}
+</div>
+);
+}
+function ModalHeader({ titel, onSluit }) {
+return (
+<div style={{ display:“flex”, justifyContent:“space-between”, alignItems:“center”, padding:“14px 18px”, borderBottom:“1px solid #f3f4f6”, position:“sticky”, top:0, background:”#fff”, zIndex:10 }}>
+<span style={{ fontSize:16, fontWeight:800 }}>{titel}</span>
+<button onClick={onSluit} style={{ border:“none”, background:”#f3f4f6”, borderRadius:99, width:30, height:30, fontSize:15, color:”#6b7280”, cursor:“pointer” }}>x</button>
+</div>
+);
+}
+function Invoer({ label, type, waarde, onChange, placeholder }) {
+return (
+<div>
+{label && <label style={{ fontSize:12, color:”#6b7280”, fontWeight:700, display:“block”, marginTop:8, marginBottom:3 }}>{label}</label>}
+<input type={type||“text”} value={waarde} onChange={e=>onChange(e.target.value)} placeholder={placeholder||label||””}
+style={{ width:“100%”, padding:“11px 12px”, border:“1.5px solid #e5e7eb”, borderRadius:10, fontSize:16, outline:“none”, fontFamily:“inherit”, boxSizing:“border-box” }} />
+</div>
+);
+}
+function GroteKnop({ kleur, onClick, children, stijl }) {
+return (
+<button onClick={onClick} style={{ width:“100%”, border:“none”, borderRadius:14, padding:14, fontSize:15, fontWeight:700, color:”#fff”, background:kleur, marginTop:8, cursor:“pointer”, fontFamily:“inherit”, …stijl }}>
+{children}
+</button>
+);
+}
+function Toast({ bericht, klaar }) {
+useEffect(() => { const t = setTimeout(klaar, 2200); return () => clearTimeout(t); }, [klaar]);
+return (
+<div style={{ position:“fixed”, bottom:90, left:“50%”, transform:“translateX(-50%)”, background:”#111827”, color:”#fff”, padding:“10px 20px”, borderRadius:99, fontSize:13, fontWeight:700, zIndex:200, whiteSpace:“nowrap” }}>
+{bericht}
+</div>
+);
+}
+function Ring({ label, val, max, kleur }) {
+const pct = max>0 ? Math.min(100, Math.round(val/max*100)) : 0;
+const over = Math.max(0, max-val);
+const r=28, circ=2*Math.PI*r, stroke=pct/100*circ;
+return (
+<div style={{ display:“flex”, flexDirection:“column”, alignItems:“center”, gap:4 }}>
+<svg width={70} height={70} viewBox="0 0 70 70">
+<circle cx={35} cy={35} r={r} fill="none" stroke="#e5e7eb" strokeWidth={6}/>
+<circle cx={35} cy={35} r={r} fill=“none” stroke={kleur} strokeWidth={6} strokeDasharray={stroke+” “+circ} strokeLinecap=“round” transform=“rotate(-90 35 35)”/>
+<text x={35} y={32} textAnchor="middle" fill={kleur} fontSize={12} fontWeight={700}>{pct}%</text>
+<text x={35} y={46} textAnchor="middle" fill="#9ca3af" fontSize={9}>{over}g</text>
+</svg>
+<span style={{ fontSize:11, fontWeight:700, color:”#374151” }}>{label}</span>
+</div>
+);
+}
+
+const BARCODE_DB = {
+// AH producten
+“8712400117661”: { naam:“Nutrilon 1 Standaard babymelkpoeder”, kcal:507, eiwit:10.4, koolhydraten:56, vet:26, portie:{label:“scoop 4.5g”,gram:4.5} },
+“8718989022808”: { naam:“gwoon Crispy Mais”, kcal:86, eiwit:3.2, koolhydraten:19, vet:1.2, portie:{label:“portie 80g”,gram:80} },
+“8719587172032”: { naam:“AH Tarwetortillas 740g”, kcal:311, eiwit:9.9, koolhydraten:52, vet:6.5, portie:{label:“Per tortilla (ca. 62g)”,gram:62} },
+“8718796113935”: { naam:“Magere kwark AH 1kg”, kcal:57, eiwit:10, koolhydraten:4.2, vet:0.2, portie:{label:“100g”,gram:100} },
+“8710400197652”: { naam:“Magere kwark AH 500g”, kcal:57, eiwit:10, koolhydraten:4.2, vet:0.2, portie:{label:“100g”,gram:100} },
+“8718906578449”: { naam:“Blauwebessen AH 500g diepvries”, kcal:57, eiwit:0.7, koolhydraten:14, vet:0.3, portie:{label:“100g”,gram:100} },
+“8718906114433”: { naam:“Diepvries zomerfruit AH”, kcal:40, eiwit:0.8, koolhydraten:9, vet:0.3, portie:{label:“100g”,gram:100} },
+“8718906365711”: { naam:“Tonijn in water blik AH”, kcal:86, eiwit:19.5, koolhydraten:0, vet:0.8, portie:{label:“blik uitgelekt 130g”,gram:130} },
+“8710400307822”: { naam:“AH Bio Magere kwark”, kcal:55, eiwit:9.5, koolhydraten:4, vet:0.2, portie:{label:“100g”,gram:100} },
+“8718906470811”: { naam:“Skyr vanille 0% AH”, kcal:66, eiwit:10, koolhydraten:6.5, vet:0.2, portie:{label:“150g”,gram:150} },
+“8710400105107”: { naam:“Kipfilet AH”, kcal:106, eiwit:23, koolhydraten:0, vet:1.5, portie:{label:“filet 150g”,gram:150} },
+// Myprotein
+“5055534302187”: { naam:“Impact Whey Protein chocolate Myprotein”, kcal:390, eiwit:74, koolhydraten:10, vet:7.5, portie:{label:“scoop 25g”,gram:25} },
+“5055534357896”: { naam:“Impact Whey Protein vanilla Myprotein”, kcal:384, eiwit:74.5, koolhydraten:8.5, vet:7.5, portie:{label:“scoop 25g”,gram:25} },
+// Overig
+“7622210713780”: { naam:“Milka melkchocolade”, kcal:535, eiwit:7, koolhydraten:58, vet:31, portie:{label:“stukje 10g”,gram:10} },
+“3017620422003”: { naam:“Nutella”, kcal:539, eiwit:6.3, koolhydraten:57.5, vet:30.9, portie:{label:“eetlepel 15g”,gram:15} },
+“5449000214911”: { naam:“Coca Cola 330ml”, kcal:42, eiwit:0, koolhydraten:10.6, vet:0, portie:{label:“blikje 330ml”,gram:330} },
+“5449000054227”: { naam:“Coca Cola Zero 330ml”, kcal:0, eiwit:0, koolhydraten:0, vet:0, portie:{label:“blikje 330ml”,gram:330} },
+“8710400906060”: { naam:“AH Volkoren brood”, kcal:218, eiwit:9, koolhydraten:38, vet:2.5, portie:{label:“snee 35g”,gram:35} },
+“8710400120154”: { naam:“AH Eieren middelgroot”, kcal:155, eiwit:12.6, koolhydraten:0.7, vet:11, portie:{label:“ei 53g”,gram:53} },
+};
+
+async function zoekBarcode(code, setStatus, onSelect) {
+code = (code || “”).trim();
+if (!code) return;
+setStatus(“laden”);
+
+// 1. Lokale database eerst (instant)
+if (BARCODE_DB[code]) {
+const p = BARCODE_DB[code];
+onSelect({ naam:p.naam, kcal:p.kcal, eiwit:p.eiwit, koolhydraten:p.koolhydraten, vet:p.vet, portie:p.portie });
+setStatus(””);
+return;
+}
+
+// 2. Open Food Facts API - exacte data van verpakking
+try {
+const url = “https://world.openfoodfacts.org/api/v2/product/” + code + “.json?fields=product_name_nl,product_name,brands,nutriments,serving_size,serving_quantity”;
+const res = await fetch(url, {
+headers: { “User-Agent”: “FitTracker - Dutch fitness app - contact@fittracker.nl” }
+});
+if (res.ok) {
+const data = await res.json();
+if (data.status === 1 && data.product) {
+const p = data.product;
+const n = p.nutriments || {};
+const naam = p.product_name_nl || p.product_name || “Onbekend product”;
+const merk = p.brands ? p.brands.split(”,”)[0].trim() : “”;
+const kcal = Math.round(n[“energy-kcal_100g”] || (n[“energy_100g”] || 0) / 4.184);
+const eiwit = Math.round((n[“proteins_100g”] || 0) * 10) / 10;
+const koolh = Math.round((n[“carbohydrates_100g”] || 0) * 10) / 10;
+const vet = Math.round((n[“fat_100g”] || 0) * 10) / 10;
+const servingGram = p.serving_quantity || parseFloat(p.serving_size) || 100;
+const servingLabel = p.serving_size || “100g”;
+onSelect({
+naam: naam + (merk ? “ (” + merk + “)” : “”),
+kcal, eiwit, koolhydraten: koolh, vet,
+portie: { label: servingLabel, gram: servingGram }
+});
+setStatus(””);
+return;
+}
+}
+} catch(e) {
+console.log(“OFF API fout:”, e);
+}
+
+// 3. Claude API als fallback
+try {
+const res = await fetch(“https://api.anthropic.com/v1/messages”, {
+method: “POST”,
+headers: {
+“Content-Type”: “application/json”,
+“anthropic-dangerous-direct-browser-access”: “true”
+},
+body: JSON.stringify({
+model: “claude-sonnet-4-20250514”,
+max_tokens: 400,
+messages: [{
+role: “user”,
+content: “Barcode “ + code + “ - welk Nederlands supermarktproduct? Antwoord ALLEEN met JSON zonder tekst: {gevonden:true,naam:string,kcal:number,eiwit:number,koolhydraten:number,vet:number,portie_gram:number,portie_label:string} of {gevonden:false}”
+}]
+})
+});
+if (res.ok) {
+const data = await res.json();
+const raw = ((data.content || [])[0] || {}).text || “”;
+const match = raw.match(/{[^{}]*}/);
+if (match) {
+const p = JSON.parse(match[0]);
+if (p.gevonden) {
+onSelect({
+naam: p.naam || “Onbekend”,
+kcal: Math.round(Number(p.kcal) || 0),
+eiwit: Math.round((Number(p.eiwit) || 0) * 10) / 10,
+koolhydraten: Math.round((Number(p.koolhydraten) || 0) * 10) / 10,
+vet: Math.round((Number(p.vet) || 0) * 10) / 10,
+portie: { label: p.portie_label || “100g”, gram: Number(p.portie_gram) || 100 }
+});
+setStatus(””);
+return;
+}
+}
+}
+} catch(e) {}
+
+setStatus(“niet_gevonden”);
+}
+
+function CameraScanner({ onResult, onClose }) {
+const videoRef = useRef(null);
+const streamRef = useRef(null);
+const intervalRef = useRef(null);
+const [status, setStatus] = useState(“starting”);
+
+useEffect(() => {
+startCamera();
+return () => stopCamera();
+}, []);
+
+const startCamera = async () => {
+try {
+const stream = await navigator.mediaDevices.getUserMedia({
+video: { facingMode: “environment”, width: { ideal: 1280 }, height: { ideal: 720 } }
+});
+streamRef.current = stream;
+if (videoRef.current) {
+videoRef.current.srcObject = stream;
+await videoRef.current.play();
+setStatus(“scanning”);
+if (“BarcodeDetector” in window) {
+const detector = new BarcodeDetector({ formats: [“ean_13”,“ean_8”,“upc_a”,“upc_e”] });
+intervalRef.current = setInterval(async () => {
+if (videoRef.current && videoRef.current.readyState === 4) {
+try {
+const codes = await detector.detect(videoRef.current);
+if (codes.length > 0) {
+clearInterval(intervalRef.current);
+stopCamera();
+onResult(codes[0].rawValue);
+}
+} catch(e) {}
+}
+}, 300);
+} else {
+setStatus(“no_detector”);
+}
+}
+} catch(e) { setStatus(“error”); }
+};
+
+const stopCamera = () => {
+if (intervalRef.current) clearInterval(intervalRef.current);
+if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+};
+
+return (
+<div style={{ position:“fixed”, inset:0, background:”#000”, zIndex:200, display:“flex”, flexDirection:“column” }}>
+<div style={{ display:“flex”, justifyContent:“space-between”, alignItems:“center”, padding:“16px 20px”, background:“rgba(0,0,0,0.8)” }}>
+<span style={{ color:”#fff”, fontWeight:700, fontSize:16 }}>Scan barcode</span>
+<button onClick={() => { stopCamera(); onClose(); }} style={{ background:”#374151”, border:“none”, borderRadius:99, width:34, height:34, color:”#fff”, fontSize:18, cursor:“pointer” }}>x</button>
+</div>
+<div style={{ flex:1, position:“relative”, overflow:“hidden” }}>
+<video ref={videoRef} style={{ width:“100%”, height:“100%”, objectFit:“cover” }} playsInline muted />
+<div style={{ position:“absolute”, inset:0, display:“flex”, alignItems:“center”, justifyContent:“center” }}>
+<div style={{ width:280, height:160, border:“3px solid #22c55e”, borderRadius:12, boxShadow:“0 0 0 9999px rgba(0,0,0,0.55)” }}/>
+</div>
+{status === “scanning” && <div style={{ position:“absolute”, bottom:40, left:0, right:0, textAlign:“center”, color:”#22c55e”, fontWeight:700 }}>Richt op de barcode</div>}
+{status === “no_detector” && (
+<div style={{ position:“absolute”, bottom:40, left:20, right:20, background:“rgba(0,0,0,0.85)”, borderRadius:12, padding:16, textAlign:“center” }}>
+<p style={{ color:”#fff”, fontSize:13, marginBottom:6 }}>Live scanner niet beschikbaar in deze browser.</p>
+<p style={{ color:”#9ca3af”, fontSize:12 }}>Gebruik de foto-optie hieronder.</p>
+</div>
+)}
+{status === “error” && <div style={{ position:“absolute”, bottom:40, left:20, right:20, background:“rgba(0,0,0,0.85)”, borderRadius:12, padding:16, textAlign:“center” }}><p style={{ color:”#ef4444”, fontSize:13 }}>Geen camera toegang. Controleer instellingen.</p></div>}
+</div>
+</div>
+);
+}
+
+function BarcodeTab({ barcode, setBarcode, status, setStatus, kleur, onSelect }) {
+const fileRef = useRef(null);
+const [showCamera, setShowCamera] = useState(false);
+const handleScan = (code) => { setShowCamera(false); setBarcode(code); zoekBarcode(code, setStatus, onSelect); };
+
+const verwerkFoto = async (file) => {
+if (!file) return;
+setStatus(“laden”);
+try {
+const b64 = await new Promise((resolve, reject) => {
+const reader = new FileReader();
+reader.onload = (ev) => resolve(ev.target.result.split(”,”)[1]);
+reader.onerror = reject;
+reader.readAsDataURL(file);
+});
+const mediaType = (file.type || “image/jpeg”);
+const res = await fetch(“https://api.anthropic.com/v1/messages”, {
+method: “POST”,
+headers: {
+“Content-Type”: “application/json”,
+“anthropic-dangerous-direct-browser-access”: “true”
+},
+body: JSON.stringify({
+model: “claude-sonnet-4-20250514”,
+max_tokens: 600,
+messages: [{
+role: “user”,
+content: [
+{ type: “image”, source: { type: “base64”, media_type: mediaType, data: b64 } },
+{ type: “text”, text: “Kijk naar deze foto van een voedselverpakking. Lees de barcode EN de voedingswaardentabel. Geef ALLEEN dit JSON terug zonder extra tekst: {gevonden:true,barcode:string,naam:string,kcal_per_100g:number,eiwit_per_100g:number,koolhydraten_per_100g:number,vet_per_100g:number,portie_gram:number,portie_label:string}. Gebruik ALTIJD de exacte getallen van de voedingswaardentabel op de verpakking. Als je de tabel niet kunt lezen, gebruik dan alleen de barcode met {gevonden:true,barcode:string,naam:string,kcal_per_100g:0,…}. Als niets leesbaar: {gevonden:false}” }
+]
+}]
+})
+});
+if (!res.ok) { setStatus(“fout”); return; }
+const data = await res.json();
+if (data.type === “error”) { setStatus(“fout”); return; }
+const raw = ((data.content || [])[0] || {}).text || “”;
+const match = raw.match(/{[\s\S]*?}/);
+if (!match) { setStatus(“niet_gevonden”); return; }
+const p = JSON.parse(match[0]);
+if (!p.gevonden) { setStatus(“niet_gevonden”); return; }
+if (p.barcode) setBarcode(String(p.barcode));
+onSelect({
+naam: p.naam || “Onbekend product”,
+kcal: Math.round(Number(p.kcal_per_100g) || 0),
+eiwit: Math.round((Number(p.eiwit_per_100g) || 0) * 10) / 10,
+koolhydraten: Math.round((Number(p.koolhydraten_per_100g) || 0) * 10) / 10,
+vet: Math.round((Number(p.vet_per_100g) || 0) * 10) / 10,
+portie: { label: p.portie_label || “100g”, gram: Number(p.portie_gram) || 100 }
+});
+setStatus(””);
+} catch (err) {
+console.error(“verwerkFoto fout:”, err);
+setStatus(“fout”);
+}
+};
+
+return (
+<div>
+<div style={{ background:”#f0fdf4”, borderRadius:12, padding:“12px 14px”, fontSize:13, color:”#166534”, marginBottom:12 }}>
+Maak een foto van de barcode of typ het nummer handmatig.
+</div>
+<input ref={fileRef} type=“file” accept=“image/*” style={{ display:“none” }}
+onChange={(e) => {
+const file = e.target.files && e.target.files[0];
+if (file) { verwerkFoto(file); e.target.value = “”; }
+}} />
+<button onClick={() => fileRef.current && fileRef.current.click()}
+disabled={status === “laden”} style={{ width:“100%”, background: status === “laden” ? “#374151” : “#111827”, opacity: status === “laden” ? 0.7 : 1, border:“none”, borderRadius:14, padding:14, fontSize:15, fontWeight:700, color:”#fff”, marginBottom:10, cursor:“pointer”, display:“flex”, alignItems:“center”, justifyContent:“center”, gap:8 }}>
+<span style={{ fontSize:20 }}>📸</span>
+<span>{status === “laden” ? “⏳ Scannen…” : “📸 Scan barcode met camera”}</span>
+</button>
+<div style={{ display:“flex”, alignItems:“center”, gap:8, margin:“10px 0” }}>
+<div style={{ flex:1, height:1, background:”#e5e7eb” }}/>
+<span style={{ fontSize:11, color:”#9ca3af”, fontWeight:600 }}>OF TYP HANDMATIG</span>
+<div style={{ flex:1, height:1, background:”#e5e7eb” }}/>
+</div>
+<label style={{ fontSize:12, color:”#6b7280”, fontWeight:700, display:“block”, marginBottom:3 }}>Barcode nummer</label>
+<input type=“number” value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder=“bijv. 8718989022808”
+style={{ width:“100%”, padding:“11px 12px”, border:“1.5px solid #e5e7eb”, borderRadius:10, fontSize:16, fontFamily:“inherit”, boxSizing:“border-box”, marginBottom:8 }} />
+<button onClick={() => zoekBarcode(barcode, setStatus, onSelect)}
+style={{ width:“100%”, border:“none”, borderRadius:14, padding:14, fontSize:15, fontWeight:700, color:”#fff”, background:kleur, cursor:“pointer”, fontFamily:“inherit” }}>
+Opzoeken op nummer
+</button>
+{status === “niet_gevonden” && <p style={{ color:”#ef4444”, fontSize:13, textAlign:“center”, marginTop:8 }}>Niet gevonden. Voeg handmatig toe.</p>}
+{status === “fout” && <p style={{ color:”#ef4444”, fontSize:13, textAlign:“center”, marginTop:8 }}>Fout. Probeer opnieuw.</p>}
+</div>
+);
+}
+
+/* ── VOEDING MODAL ── */
+function VoedingModal({ maaltijd, profiel, bibl, onSluit, onVoegToe, addBibl }) {
+const [tab, setTab] = useState(“zoek”);
+const [zoekTekst, setZoekTekst] = useState(””);
+const [gevonden, setGevonden] = useState([]);
+const [gesel, setGesel] = useState(null);
+const [gram, setGram] = useState(“100”);
+const [actievePortie, setActievePortie] = useState(1);
+const [barcode, setBarcode] = useState(””);
+const [barcodeStatus, setBarcodeStatus] = useState(””);
+const [hNaam, setHNaam] = useState(””); const [hKcal, setHKcal] = useState(””);
+const [hEiwit, setHEiwit] = useState(””); const [hKoolh, setHKoolh] = useState(””);
+const [hVet, setHVet] = useState(””); const [hGram, setHGram] = useState(“100”);
+
+const zoek = (q) => {
+setZoekTekst(q);
+const t = q.trim();
+if (!t) { setGevonden([]); return; }
+setGevonden(PRODUCTEN.filter(p => p.naam.toLowerCase().includes(t.toLowerCase())).slice(0,10));
+};
+
+const selecteer = (p) => {
+setGesel(p);
+setGram(p.portie ? String(p.portie.gram) : “100”);
+setActievePortie(1);
+setTab(“detail”);
+};
+
+const voegToe = () => {
+if (!gesel) return;
+const g = Number(gram)||100;
+const m = calc(gesel, g);
+addBibl({ naam:gesel.naam, kcal:gesel.kcal, eiwit:gesel.eiwit, koolhydraten:gesel.koolhydraten, vet:gesel.vet, portie:gesel.portie });
+onVoegToe({ id:Date.now(), naam:gesel.naam, gram:g, kcal:m.kcal, eiwit:m.eiwit, koolhydraten:m.koolhydraten, vet:m.vet, gegeten:false });
+onSluit();
+};
+
+const voegHandmatigToe = () => {
+if (!hNaam||!hKcal) { alert(“Vul naam en calorieen in.”); return; }
+const g = Number(hGram)||100;
+const item = { id:Date.now(), naam:hNaam, gram:g, kcal:Number(hKcal), eiwit:Number(hEiwit)||0, koolhydraten:Number(hKoolh)||0, vet:Number(hVet)||0, gegeten:false };
+addBibl({ naam:hNaam, kcal:Number(hKcal), eiwit:Number(hEiwit)||0, koolhydraten:Number(hKoolh)||0, vet:Number(hVet)||0 });
+onVoegToe(item); onSluit();
+};
+
+const g = Number(gram)||100;
+const macros = gesel ? calc(gesel, g) : null;
+const tabStijl = (t) => ({ padding:“8px 4px”, border:“none”, borderRadius:10, fontWeight:700, fontSize:11, cursor:“pointer”, fontFamily:“inherit”, textAlign:“center”, background: tab===t ? profiel.kleur : “#f3f4f6”, color: tab===t ? “#fff” : “#6b7280” });
+
+return (
+<Overlay>
+<Sheet>
+<ModalHeader titel={“Log voeding — “+maaltijd} onSluit={onSluit} />
+<div style={{ display:“grid”, gridTemplateColumns:“repeat(4,1fr)”, padding:“10px 14px 0”, gap:5, boxSizing:“border-box” }}>
+{[[“zoek”,“Zoeken”],[“barcode”,“Barcode”],[“opgeslagen”,“Opgeslagen”],[“handmatig”,“Handmatig”]].map(([t,l]) => (
+<button key={t} style={tabStijl(t)} onClick={() => { setTab(t); setGesel(null); }}>{l}</button>
+))}
+</div>
+<div style={{ padding:“14px 16px”, boxSizing:“border-box”, width:“100%”, overflowX:“hidden” }}>
+{tab===“zoek” && !gesel && (
+<div>
+<Invoer waarde={zoekTekst} onChange={zoek} placeholder="Zoek product..." />
+<div style={{ marginTop:4 }}>
+{gevonden.map((p,i) => (
+<div key={i} onClick={() => selecteer(p)} style={{ display:“flex”, alignItems:“center”, gap:10, padding:“10px 0”, borderBottom:“1px solid #f9fafb”, cursor:“pointer” }}>
+<div style={{ width:40, height:40, background:”#f3f4f6”, borderRadius:8, display:“flex”, alignItems:“center”, justifyContent:“center”, fontSize:20, flexShrink:0 }}>{productEmoji(p.naam)}</div>
+<div style={{ flex:1, minWidth:0 }}>
+<div style={{ fontSize:13, fontWeight:700, overflow:“hidden”, textOverflow:“ellipsis”, whiteSpace:“nowrap” }}>{p.naam}</div>
+<div style={{ fontSize:11, color:profiel.kleur }}>
+{p.kcal} kcal/100g{p.portie && <span style={{ color:”#9ca3af” }}> · {p.portie.label}: {Math.round(p.kcal*p.portie.gram/100)} kcal</span>}
+</div>
+</div>
+</div>
+))}
+{zoekTekst && gevonden.length===0 && <p style={{ color:”#9ca3af”, fontSize:13, textAlign:“center”, padding:“12px 0” }}>Niet gevonden. Probeer handmatig.</p>}
+</div>
+</div>
+)}
+{tab===“opgeslagen” && !gesel && (
+<div>
+{bibl.length===0 ? <p style={{ color:”#9ca3af”, fontSize:13, textAlign:“center”, padding:“20px 0” }}>Nog geen opgeslagen producten.</p>
+: bibl.map((p,i) => (
+<div key={i} onClick={() => selecteer(p)} style={{ display:“flex”, alignItems:“center”, gap:10, padding:“10px 0”, borderBottom:“1px solid #f9fafb”, cursor:“pointer” }}>
+<div style={{ width:40, height:40, background:”#fff7ed”, borderRadius:8, display:“flex”, alignItems:“center”, justifyContent:“center”, fontSize:20, flexShrink:0 }}>{productEmoji(p.naam)}</div>
+<div style={{ flex:1, minWidth:0 }}>
+<div style={{ fontSize:13, fontWeight:700, overflow:“hidden”, textOverflow:“ellipsis”, whiteSpace:“nowrap” }}>{p.naam}</div>
+<div style={{ fontSize:11, color:profiel.kleur }}>{p.kcal} kcal/100g</div>
+</div>
+</div>
+))}
+</div>
+)}
+{tab===“barcode” && !gesel && (
+<BarcodeTab
+barcode={barcode}
+setBarcode={setBarcode}
+status={barcodeStatus}
+setStatus={setBarcodeStatus}
+kleur={profiel.kleur}
+onSelect={selecteer}
+/>
+)}
+{tab===“detail” && gesel && (
+<div>
+<div style={{ background:”#f9fafb”, borderRadius:14, padding:12, marginBottom:12 }}>
+<div style={{ fontSize:15, fontWeight:800 }}>{gesel.naam}</div>
+<div style={{ fontSize:11, color:”#6b7280” }}>Per 100g: {gesel.kcal} kcal</div>
+</div>
+{gesel.portie && (
+<div style={{ display:“flex”, flexWrap:“wrap”, gap:6, marginBottom:10 }}>
+{[1,2,3,4,5].map(n => (
+<button key={n} onClick={() => { setGram(String(gesel.portie.gram*n)); setActievePortie(n); }}
+style={{ padding:“6px 12px”, border:“none”, borderRadius:99, fontWeight:700, fontSize:11, cursor:“pointer”, fontFamily:“inherit”,
+background: actievePortie===n ? profiel.kleur : “#f3f4f6”,
+color: actievePortie===n ? “#fff” : “#6b7280” }}>
+{n}x {gesel.portie.label}
+</button>
+))}
+</div>
+)}
+<Invoer label=“Gram (of pas portie aan)” type=“number” waarde={gram} onChange={(v) => { setGram(v); setActievePortie(null); }} />
+{macros && (
+<div style={{ display:“grid”, gridTemplateColumns:“repeat(4,1fr)”, gap:6, marginTop:10 }}>
+{[[macros.kcal,“Kcal”,”#f97316”],[macros.eiwit,“Eiwit”,”#3b82f6”],[macros.koolhydraten,“Koolh.”,”#ec4899”],[macros.vet,“Vet”,”#f59e0b”]].map(([v,l,c]) => (
+<div key={l} style={{ background:c+“18”, borderRadius:10, padding:“8px 4px”, textAlign:“center” }}>
+<div style={{ fontSize:14, fontWeight:800, color:c }}>{v}</div>
+<div style={{ fontSize:9, color:”#9ca3af” }}>{l}</div>
+</div>
+))}
+</div>
+)}
+<div style={{ display:“flex”, gap:8, marginTop:12 }}>
+<button onClick={() => { setGesel(null); setTab(“zoek”); }} style={{ flex:1, background:”#f3f4f6”, border:“none”, borderRadius:12, padding:12, fontSize:14, fontWeight:700, color:”#6b7280”, cursor:“pointer” }}>Terug</button>
+<button onClick={voegToe} style={{ flex:2, background:profiel.kleur, border:“none”, borderRadius:12, padding:12, fontSize:14, fontWeight:700, color:”#fff”, cursor:“pointer” }}>Toevoegen</button>
+</div>
+</div>
+)}
+{tab===“handmatig” && (
+<div>
+<Invoer label="Productnaam" waarde={hNaam} onChange={setHNaam} />
+<Invoer label="Gram (portie)" type="number" waarde={hGram} onChange={setHGram} />
+<Invoer label="Calorieen (kcal)" type="number" waarde={hKcal} onChange={setHKcal} />
+<Invoer label="Eiwit (g)" type="number" waarde={hEiwit} onChange={setHEiwit} />
+<Invoer label="Koolhydraten (g)" type="number" waarde={hKoolh} onChange={setHKoolh} />
+<Invoer label="Vet (g)" type="number" waarde={hVet} onChange={setHVet} />
+<GroteKnop kleur={profiel.kleur} onClick={voegHandmatigToe}>Opslaan en toevoegen</GroteKnop>
+</div>
+)}
+</div>
+</Sheet>
+</Overlay>
+);
+}
+
+/* ── KOPIEREN MODAL ── */
+function KopierenModal({ item, maaltijd, profiel, onSluit, onKopieer }) {
+const [selDagen, setSelDagen] = useState([]);
+const [naarM, setNaarM] = useState(maaltijd);
+const beschikbaar = dagen14().filter(d => d !== item._vandatum);
+const toggleDag = (d) => setSelDagen(p => p.includes(d) ? p.filter(x=>x!==d) : […p,d]);
+return (
+<Overlay>
+<Sheet>
+<ModalHeader titel="Kopieren naar andere dagen" onSluit={onSluit} />
+<div style={{ padding:“14px 18px” }}>
+<label style={{ fontSize:12, color:”#6b7280”, fontWeight:700, display:“block”, marginBottom:4 }}>Kopieren naar maaltijd</label>
+<select value={naarM} onChange={e=>setNaarM(e.target.value)} style={{ width:“100%”, padding:“11px 12px”, border:“1.5px solid #e5e7eb”, borderRadius:10, fontSize:16, fontFamily:“inherit”, background:”#fff” }}>
+{MAALTIJDEN.map(m => <option key={m} value={m}>{m}</option>)}
+</select>
+<div style={{ display:“flex”, justifyContent:“space-between”, alignItems:“center”, marginTop:14, marginBottom:8 }}>
+<span style={{ fontSize:13, fontWeight:800 }}>Selecteer dagen</span>
+<button onClick={() => setSelDagen([…beschikbaar])} style={{ border:“none”, background:profiel.kleur+“22”, color:profiel.kleur, borderRadius:99, padding:“4px 12px”, fontSize:12, fontWeight:700, cursor:“pointer” }}>Alles</button>
+</div>
+{beschikbaar.map(d => {
+const { dag, num, mnd } = fmtDag(d);
+const sel = selDagen.includes(d);
+return (
+<div key={d} onClick={() => toggleDag(d)} style={{ display:“flex”, alignItems:“center”, gap:12, padding:“10px 0”, borderBottom:“1px solid #f9fafb”, cursor:“pointer” }}>
+<div style={{ width:22, height:22, borderRadius:6, border:“2px solid “+(sel?profiel.kleur:”#d1d5db”), background:sel?profiel.kleur:“transparent”, flexShrink:0, display:“flex”, alignItems:“center”, justifyContent:“center” }}>
+{sel && <svg width="12" height="12" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+</div>
+<span style={{ fontSize:14, fontWeight:600 }}>{dag} {num} {mnd}</span>
+{d===vandaag() && <span style={{ fontSize:10, color:profiel.kleur, fontWeight:700 }}>vandaag</span>}
+</div>
+);
+})}
+<GroteKnop kleur={profiel.kleur} onClick={() => { if(!selDagen.length){alert(“Selecteer een dag.”);return;} onKopieer(naarM,selDagen); onSluit(); }} stijl={{ marginTop:16 }}>
+Kopieren naar {selDagen.length} dag{selDagen.length!==1?“en”:””}
+</GroteKnop>
+</div>
+</Sheet>
+</Overlay>
+);
+}
+
+/* ── VOEDING SCHERM ── */
+function VoedingScherm({ profiel, datum, logs, updLog, doelen, updDoel, bibl, addBibl }) {
+const [voegToeModal, setVoegToeModal] = useState(null);
+const [kopierenModal, setKopierenModal] = useState(null);
+const [bewerkItem, setBewerkItem] = useState(null);
+const [bewerkGram, setBewerkGram] = useState(””);
+const [bewerkActief, setBewerkActief] = useState(null);
+const [selectieModus, setSelectieModus] = useState(false);
+const [geselecteerd, setGeselecteerd] = useState([]);
+const [doelenOpen, setDoelenOpen] = useState(false);
+const [dTemp, setDTemp] = useState({});
+const [toast, setToast] = useState(null);
+
+const p = profiel;
+const key = p.id+”_”+datum;
+const log = logs[key]||{};
+const doel = doelen[p.id]||DEF_DOEL;
+
+useEffect(() => { setDTemp({…doel}); }, [p.id]);
+
+const alleItems = Object.values(log).reduce((a,b)=>a.concat(b),[]);
+const gegetenItems = alleItems.filter(i=>i.gegeten);
+const totaal = gegetenItems.reduce((a,i)=>({ kcal:a.kcal+i.kcal, eiwit:a.eiwit+i.eiwit, koolhydraten:a.koolhydraten+i.koolhydraten, vet:a.vet+i.vet }),{ kcal:0, eiwit:0, koolhydraten:0, vet:0 });
+const gepland = alleItems.reduce((a,i)=>a+i.kcal,0);
+const over = Math.max(0, doel.kcal-totaal.kcal);
+const pctG = Math.min(100, doel.kcal>0 ? (totaal.kcal/doel.kcal)*100 : 0);
+const pctP = Math.min(100, doel.kcal>0 ? (gepland/doel.kcal)*100 : 0);
+
+const isGesel = (m, id) => geselecteerd.includes(m+”|”+id);
+
+const toggleGesel = (m, id) => {
+const k = m+”|”+id;
+setGeselecteerd(prev => prev.includes(k) ? prev.filter(x=>x!==k) : […prev,k]);
+};
+
+const startSelectie = (m, id) => {
+setSelectieModus(true);
+setGeselecteerd([m+”|”+id]);
+};
+
+const sluitSelectie = () => { setSelectieModus(false); setGeselecteerd([]); };
+
+const markeerGegeten = (alsGegeten) => {
+geselecteerd.forEach(k => {
+const [m, idStr] = k.split(”|”);
+updLog(p.id, datum, l => ({ …l, [m]: (l[m]||[]).map(i => i.id===Number(idStr) ? {…i, gegeten:alsGegeten} : i) }));
+});
+setToast(geselecteerd.length+” items als “+(alsGegeten?“gegeten”:“niet gegeten”)+” gemarkeerd”);
+sluitSelectie();
+};
+
+// Knop logica: toon “Niet gegeten” alleen als ALLE geselecteerd al gegeten zijn
+const alleGesel_zijnGegeten = geselecteerd.length > 0 && geselecteerd.every(k => {
+const [m, idStr] = k.split(”|”);
+return !!(log[m]||[]).find(i => i.id===Number(idStr) && i.gegeten);
+});
+
+const verwijderSelectie = () => {
+geselecteerd.forEach(k => {
+const [m, idStr] = k.split(”|”);
+updLog(p.id, datum, l => ({ …l, [m]: (l[m]||[]).filter(i => i.id!==Number(idStr)) }));
+});
+sluitSelectie();
+};
+
+const bewaarBewerking = () => {
+if (!bewerkItem||!bewerkGram) return;
+const g = Number(bewerkGram); if(g<=0) return;
+const orig = bewerkItem.item;
+const factor = g/orig.gram;
+const updated = { …orig, gram:g, kcal:Math.round(orig.kcal*factor), eiwit:Math.round(orig.eiwit*factor), koolhydraten:Math.round(orig.koolhydraten*factor), vet:Math.round(orig.vet*factor) };
+updLog(p.id, datum, l => ({ …l, [bewerkItem.maaltijd]: (l[bewerkItem.maaltijd]||[]).map(i => i.id===orig.id ? updated : i) }));
+setBewerkItem(null); setBewerkGram(””);
+};
+
+return (
+<div style={{ paddingBottom:80, overflowX:“hidden” }}>
+{toast && <Toast bericht={toast} klaar={()=>setToast(null)} />}
+
+```
+  {/* MACRO BALK */}
+  <div style={{ background:"#1c1c1e", borderRadius:12, margin:"0 0 10px", padding:"8px 10px", display:"flex", alignItems:"center", gap:6, overflow:"hidden", boxSizing:"border-box", width:"100%" }}>
+    <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
+      <svg width={36} height={36} viewBox="0 0 36 36">
+        <circle cx={18} cy={18} r={14} fill="none" stroke="#374151" strokeWidth={4}/>
+        <circle cx={18} cy={18} r={14} fill="none" stroke={p.kleur} strokeWidth={4} strokeDasharray={Math.min(100,pctG)/100*88+" 88"} strokeLinecap="round" transform="rotate(-90 18 18)"/>
+      </svg>
+      <div>
+        <div style={{ fontSize:17, fontWeight:900, color:"#fff", lineHeight:1 }}>{totaal.kcal}</div>
+        <div style={{ fontSize:9, color:"#6b7280" }}>kcal</div>
+      </div>
+    </div>
+    <div style={{ width:1, height:24, background:"#374151", flexShrink:0 }}/>
+    {[[totaal.koolhydraten,doel.koolhydraten,"#ec4899","K"],[totaal.eiwit,doel.eiwit,"#60a5fa","E"],[totaal.vet,doel.vet,"#f97316","V"]].map(([val,max,kleur,lbl]) => {
+      const pct = max>0 ? Math.min(100,Math.round(val/max*100)) : 0;
+      return (
+        <div key={lbl} style={{ display:"flex", alignItems:"center", gap:4, flex:1, minWidth:0 }}>
+          <svg width={26} height={26} viewBox="0 0 26 26" style={{ flexShrink:0 }}>
+            <circle cx={13} cy={13} r={10} fill="none" stroke="#374151" strokeWidth={3}/>
+            <circle cx={13} cy={13} r={10} fill="none" stroke={kleur} strokeWidth={3} strokeDasharray={pct/100*63+" 63"} strokeLinecap="round" transform="rotate(-90 13 13)"/>
+          </svg>
+          <div style={{ minWidth:0 }}>
+            <span style={{ fontSize:12, fontWeight:800, color:"#fff" }}>{val}</span>
+            <span style={{ fontSize:9, color:"#6b7280" }}>g </span>
+            <span style={{ fontSize:9, color:"#6b7280" }}>{pct}%</span>
+          </div>
+        </div>
+      );
+    })}
+  </div>
+
+  {/* SELECTIE BANNER - altijd zichtbaar om verspringen te voorkomen */}
+  <div style={{ background:"#fff", borderRadius:12, padding:"10px 14px", marginBottom:10, boxShadow:"0 2px 12px rgba(0,0,0,0.12)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+    <button onClick={() => { const all=[]; Object.entries(log).forEach(([m,items])=>items.forEach(i=>all.push(m+"|"+i.id))); setGeselecteerd(all); setSelectieModus(true); }} style={{ border:"none", background:"none", color:p.kleur, fontSize:13, fontWeight:700, cursor:"pointer" }}>Selecteer alles</button>
+    <span style={{ fontSize:13, fontWeight:700, color: geselecteerd.length>0 ? "#374151" : "#d1d5db" }}>{geselecteerd.length} geselecteerd</span>
+    <button onClick={sluitSelectie} style={{ border:"none", background:"none", color: geselecteerd.length>0 ? "#9ca3af" : "#e5e7eb", fontSize:13, fontWeight:700, cursor:"pointer" }}>Annuleren</button>
+  </div>
+
+  {/* KCAL KAART */}
+  <div style={{ background:"#fff", borderRadius:16, padding:"14px 16px", marginBottom:10, boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+      <span style={{ fontSize:13, color:"#6b7280" }}>Je kunt nog</span>
+      <button onClick={()=>setDoelenOpen(true)} style={{ border:"none", background:"none", fontSize:12, color:p.kleur, fontWeight:700, cursor:"pointer" }}>Doel: {doel.kcal} kcal</button>
+    </div>
+    <div style={{ fontSize:26, fontWeight:900, color:"#111827", marginBottom:8 }}>{over} <span style={{ fontSize:15, fontWeight:500, color:"#6b7280" }}>calorieen eten</span></div>
+    <div style={{ background:"#e5e7eb", borderRadius:99, height:8, position:"relative", overflow:"hidden" }}>
+      <div style={{ position:"absolute", left:0, top:0, width:pctP+"%", height:"100%", background:p.kleur+"40", borderRadius:99 }}/>
+      <div style={{ position:"absolute", left:0, top:0, width:pctG+"%", height:"100%", background:p.kleur, borderRadius:99 }}/>
+    </div>
+    <div style={{ display:"flex", gap:12, marginTop:6 }}>
+      <span style={{ fontSize:11, color:p.kleur, fontWeight:700 }}><svg width="11" height="11" viewBox="0 0 11 11" style={{marginRight:3, verticalAlign:"middle"}}><polyline points="1.5,5.5 4.5,8.5 9.5,2.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>{totaal.kcal} gegeten</span>
+      {gepland>totaal.kcal && <span style={{ fontSize:11, color:"#c4c4c4" }}><svg width="11" height="11" viewBox="0 0 11 11" style={{marginRight:3, verticalAlign:"middle"}}><circle cx="5.5" cy="5.5" r="4" fill="none" stroke="currentColor" strokeWidth="1.8"/></svg>{gepland} gepland</span>}
+    </div>
+  </div>
+
+  {/* MAALTIJDEN */}
+  {MAALTIJDEN.map(m => {
+    const items = log[m]||[];
+    const mKcalG = items.filter(i=>i.gegeten).reduce((a,i)=>a+i.kcal,0);
+    const mKcalP = items.reduce((a,i)=>a+i.kcal,0);
+    return (
+      <div key={m} style={{ background:"#fff", borderRadius:16, padding:"12px 14px", marginBottom:10, boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:items.length?8:0 }}>
+          <div>
+            <span style={{ fontSize:15, fontWeight:800, color:"#111827" }}>{m}</span>
+            {mKcalP>0 && <div style={{ fontSize:11, color:mKcalG>0?p.kleur:"#9ca3af", marginTop:1 }}>{mKcalG>0 ? mKcalG+" kcal ("+Math.round(mKcalG/doel.kcal*100)+"%)" : mKcalP+" kcal gepland"}</div>}
+          </div>
+          <button onClick={()=>setVoegToeModal(m)} style={{ background:p.kleur, border:"none", borderRadius:99, width:30, height:30, color:"#fff", fontSize:20, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>+</button>
+        </div>
+        {items.length===0 && <div onClick={()=>setVoegToeModal(m)} style={{ fontSize:13, color:"#d1d5db", padding:"4px 0", cursor:"pointer" }}>+ Voeg iets toe</div>}
+        {items.map(item => {
+          const gg = !!item.gegeten;
+          const sel = isGesel(m, item.id);
+          const emoji = productEmoji(item.naam);
+          return (
+            <ProductRij key={item.id} item={item} emoji={emoji} gg={gg} sel={sel}
+              selectieModus={selectieModus} kleur={p.kleur}
+              onRijTik={() => {
+                if (selectieModus) { toggleGesel(m, item.id); }
+                else { setBewerkItem({item, maaltijd:m}); setBewerkGram(String(item.gram)); setBewerkActief(null); }
+              }}
+              onBolletjeTik={() => {
+                if (selectieModus) { toggleGesel(m, item.id); }
+                else { startSelectie(m, item.id); }
+              }}
+            />
+          );
+        })}
+      </div>
+    );
+  })}
+
+  {/* ACTIE BALK */}
+  {selectieModus && geselecteerd.length>0 && (
+    <div style={{ position:"fixed", bottom:60, left:"50%", transform:"translateX(-50%)", width:"calc(100% - 28px)", maxWidth:400, background:"#1c1c1e", borderRadius:16, padding:"12px 8px", display:"flex", justifyContent:"space-around", alignItems:"center", zIndex:60, boxShadow:"0 -4px 24px rgba(0,0,0,0.3)" }}>
+      <button onClick={() => markeerGegeten(!alleGesel_zijnGegeten)} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:3, border:"none", background:"none", cursor:"pointer" }}>
+        <div style={{ width:40, height:40, borderRadius:12, background: alleGesel_zijnGegeten ? "#ef444422" : p.kleur+"22", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>
+          {alleGesel_zijnGegeten ? "↩️" : "✅"}
+        </div>
+        <span style={{ fontSize:10, color: alleGesel_zijnGegeten ? "#ef4444" : "#fff", fontWeight:600 }}>{alleGesel_zijnGegeten ? "Niet gegeten" : "Gegeten"}</span>
+      </button>
+      <button onClick={() => {
+        const items = geselecteerd.map(k => { const [m,idStr]=k.split("|"); return { item:(log[m]||[]).find(i=>i.id===Number(idStr)), maaltijd:m }; }).filter(x=>x.item);
+        if(items.length===1) { setKopierenModal({ item:{...items[0].item, _vandatum:datum}, maaltijd:items[0].maaltijd }); }
+        else { setKopierenModal({ items:items.map(x=>({...x.item, _vandatum:datum, _maaltijd:x.maaltijd})), meerdere:true }); }
+        sluitSelectie();
+      }} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:3, border:"none", background:"none", cursor:"pointer" }}>
+        <div style={{ width:40, height:40, borderRadius:12, background:"#3b82f622", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>📋</div>
+        <span style={{ fontSize:10, color:"#fff", fontWeight:600 }}>Kopieer</span>
+      </button>
+      <button onClick={verwijderSelectie} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:3, border:"none", background:"none", cursor:"pointer" }}>
+        <div style={{ width:40, height:40, borderRadius:12, background:"#ef444422", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>🗑️</div>
+        <span style={{ fontSize:10, color:"#ef4444", fontWeight:600 }}>Verwijder</span>
+      </button>
+    </div>
+  )}
+
+  {/* BEWERK GRAM MODAL */}
+  {bewerkItem && (
+    <Overlay>
+      <Sheet>
+        <ModalHeader titel="Grammen aanpassen" onSluit={()=>setBewerkItem(null)} />
+        <div style={{ padding:"16px 18px" }}>
+          <div style={{ background:"#f9fafb", borderRadius:12, padding:12, marginBottom:16, display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:44, height:44, borderRadius:10, background:p.kleur+"18", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>{productEmoji(bewerkItem.item.naam)}</div>
+            <div>
+              <div style={{ fontSize:15, fontWeight:800 }}>{bewerkItem.item.naam}</div>
+              <div style={{ fontSize:11, color:"#9ca3af" }}>Huidig: {bewerkItem.item.gram}g · {bewerkItem.item.kcal} kcal</div>
+            </div>
+          </div>
+          {(() => { const orig=PRODUCTEN.find(p2=>p2.naam===bewerkItem.item.naam); const portie=orig?.portie; if(!portie) return null;
+            return <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:12 }}>{[1,2,3,4,5].map(n=>(
+              <button key={n} onClick={()=>{setBewerkGram(String(portie.gram*n));setBewerkActief(n);}}
+                style={{ padding:"7px 12px", border:"none", borderRadius:99, fontWeight:700, fontSize:11, cursor:"pointer", fontFamily:"inherit", background:bewerkActief===n?p.kleur:"#f3f4f6", color:bewerkActief===n?"#fff":"#6b7280" }}>
+                {n}x {portie.label}
+              </button>
+            ))}</div>;
+          })()}
+          <Invoer label="Aantal gram" type="number" waarde={bewerkGram} onChange={(v)=>{setBewerkGram(v);setBewerkActief(null);}} />
+          {bewerkGram && Number(bewerkGram)>0 && (() => {
+            const orig=bewerkItem.item; const g=Number(bewerkGram); const f=g/orig.gram;
+            return <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6, marginTop:10 }}>
+              {[[Math.round(orig.kcal*f),"Kcal","#f97316"],[Math.round(orig.eiwit*f),"Eiwit","#3b82f6"],[Math.round(orig.koolhydraten*f),"Koolh.","#ec4899"],[Math.round(orig.vet*f),"Vet","#f59e0b"]].map(([v,l,c])=>(
+                <div key={l} style={{ background:c+"18", borderRadius:10, padding:"8px 4px", textAlign:"center" }}>
+                  <div style={{ fontSize:14, fontWeight:800, color:c }}>{v}</div>
+                  <div style={{ fontSize:9, color:"#9ca3af" }}>{l}</div>
+                </div>
+              ))}
+            </div>;
+          })()}
+          <GroteKnop kleur={p.kleur} onClick={bewaarBewerking}>Opslaan</GroteKnop>
+        </div>
+      </Sheet>
+    </Overlay>
+  )}
+
+  {voegToeModal && (
+    <VoedingModal maaltijd={voegToeModal} profiel={p} bibl={bibl} addBibl={addBibl}
+      onSluit={()=>setVoegToeModal(null)}
+      onVoegToe={item => { updLog(p.id, datum, l => ({...l, [voegToeModal]:[...(l[voegToeModal]||[]),item]})); setVoegToeModal(null); }} />
+  )}
+  {kopierenModal && !kopierenModal.meerdere && (
+    <KopierenModal item={kopierenModal.item} maaltijd={kopierenModal.maaltijd} profiel={p}
+      onSluit={()=>setKopierenModal(null)} onKopieer={(naarM,selDagen)=>{
+        selDagen.forEach(d => updLog(p.id,d,l=>({...l,[naarM]:[...(l[naarM]||[]),{...kopierenModal.item,id:Date.now()+Math.random(),_vandatum:undefined}]})));
+        setToast("Gekopieerd naar "+selDagen.length+" dag"+(selDagen.length!==1?"en":""));
+      }} />
+  )}
+  {kopierenModal && kopierenModal.meerdere && (
+    <KopierenModal item={kopierenModal.items[0]} maaltijd={kopierenModal.items[0]._maaltijd} profiel={p}
+      onSluit={()=>setKopierenModal(null)} onKopieer={(naarM,selDagen)=>{
+        kopierenModal.items.forEach(item => selDagen.forEach(d => updLog(p.id,d,l=>({...l,[naarM]:[...(l[naarM]||[]),{...item,id:Date.now()+Math.random(),_vandatum:undefined,_maaltijd:undefined}]}))));
+        setToast(kopierenModal.items.length+" items gekopieerd");
+      }} />
+  )}
+  {doelenOpen && (
+    <Overlay><Sheet>
+      <ModalHeader titel={"Doelen — "+p.naam} onSluit={()=>setDoelenOpen(false)} />
+      <div style={{ padding:"16px 18px" }}>
+        <Invoer label="Calorieen (kcal)" type="number" waarde={String(dTemp.kcal||"")} onChange={v=>setDTemp(d=>({...d,kcal:Number(v)}))} />
+        <Invoer label="Eiwit (g)" type="number" waarde={String(dTemp.eiwit||"")} onChange={v=>setDTemp(d=>({...d,eiwit:Number(v)}))} />
+        <Invoer label="Koolhydraten (g)" type="number" waarde={String(dTemp.koolhydraten||"")} onChange={v=>setDTemp(d=>({...d,koolhydraten:Number(v)}))} />
+        <Invoer label="Vet (g)" type="number" waarde={String(dTemp.vet||"")} onChange={v=>setDTemp(d=>({...d,vet:Number(v)}))} />
+        <GroteKnop kleur={p.kleur} onClick={()=>{ updDoel(p.id,dTemp); setDoelenOpen(false); }}>Opslaan</GroteKnop>
+      </div>
+    </Sheet></Overlay>
+  )}
+</div>
+```
+
+);
+}
+
+/* ── PRODUCT RIJ ── */
+function ProductRij({ item, emoji, gg, sel, selectieModus, kleur, onRijTik, onBolletjeTik }) {
+return (
+<div onClick={onRijTik} style={{ display:“flex”, alignItems:“center”, padding:“10px 0”, borderBottom:“1px solid #f3f4f6”, cursor:“pointer”, userSelect:“none”, WebkitUserSelect:“none” }}>
+<div style={{ width:44, height:44, borderRadius:10, background: gg ? kleur+“18” : “#f3f4f6”, display:“flex”, alignItems:“center”, justifyContent:“center”, fontSize:22, marginRight:10, flexShrink:0, opacity: gg ? 1 : 0.75 }}>
+{emoji}
+</div>
+<div style={{ flex:1, minWidth:0 }}>
+<div style={{ fontSize:13, fontWeight: gg ? 700 : 500, color: gg ? “#111827” : “#6b7280”, overflow:“hidden”, textOverflow:“ellipsis”, whiteSpace:“nowrap” }}>{item.naam}</div>
+<div style={{ fontSize:11, color: gg ? kleur : “#9ca3af” }}>{item.kcal} kcal · {item.gram}g</div>
+</div>
+{/* Bolletje: in selectiemodus toont selectiestatus, anders toont gegeten-rand */}
+<div onClick={e => { e.stopPropagation(); onBolletjeTik(); }}
+style={{ width:26, height:26, borderRadius:99, flexShrink:0, display:“flex”, alignItems:“center”, justifyContent:“center”,
+border: “2px solid “ + (sel ? kleur : (gg ? kleur+“80” : “#d1d5db”)),
+background: sel ? kleur : “transparent” }}>
+{sel && <svg width="12" height="12" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+</div>
+</div>
+);
+}
+
+/* ── TRAINING SCHERM ── */
+function TrainingScherm({ profiel, datum, trainingen, updTrain }) {
+const [modal, setModal] = useState(false);
+const [naam, setNaam] = useState(””); const [sets, setSets] = useState(“3”);
+const [reps, setReps] = useState(“10”); const [gew, setGew] = useState(””);
+const p = profiel;
+const key = p.id+”_”+datum;
+const oefs = trainingen[key]||[];
+const vol = oefs.filter(o=>o.done).length;
+const voegToe = () => {
+if(!naam) return;
+updTrain(p.id, datum, l => […l, {id:Date.now(), naam, sets:Number(sets), reps:Number(reps), gewicht:Number(gew)||0, done:false}]);
+setModal(false); setNaam(””); setSets(“3”); setReps(“10”); setGew(””);
+};
+return (
+<div style={{ paddingBottom:24 }}>
+<div style={{ background:“linear-gradient(135deg,”+p.kleur+”,”+p.kleur+“cc)”, borderRadius:16, padding:“16px 18px”, marginBottom:14, color:”#fff” }}>
+<div style={{ fontSize:12, fontWeight:700, opacity:0.85 }}>Workout — {p.naam}</div>
+<div style={{ fontSize:30, fontWeight:900, margin:“4px 0” }}>{vol}/{oefs.length}</div>
+<div style={{ fontSize:13, opacity:0.85 }}>oefeningen voltooid</div>
+{oefs.length>0 && <div style={{ background:“rgba(255,255,255,0.25)”, borderRadius:99, height:6, marginTop:10, overflow:“hidden” }}><div style={{ width:(vol/oefs.length*100)+”%”, height:“100%”, background:”#fff”, borderRadius:99 }}/></div>}
+</div>
+{oefs.length===0 && <div style={{ textAlign:“center”, padding:“24px 0”, color:”#9ca3af”, fontSize:14 }}>Nog geen oefeningen.</div>}
+{oefs.map(o => (
+<div key={o.id} style={{ background:”#fff”, borderRadius:14, padding:“14px 16px”, marginBottom:8, boxShadow:“0 1px 4px rgba(0,0,0,0.06)”, display:“flex”, alignItems:“center”, gap:12 }}>
+<div onClick={()=>updTrain(p.id,datum,l=>l.map(x=>x.id===o.id?{…x,done:!x.done}:x))}
+style={{ width:26, height:26, borderRadius:99, border:“2.5px solid “+(o.done?p.kleur:”#d1d5db”), background:o.done?p.kleur:“transparent”, cursor:“pointer”, flexShrink:0, display:“flex”, alignItems:“center”, justifyContent:“center” }}>
+{o.done && <svg width="12" height="12" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+</div>
+<div style={{ flex:1 }}>
+<div style={{ fontSize:14, fontWeight:700, color:o.done?”#9ca3af”:”#111827”, textDecoration:o.done?“line-through”:“none” }}>{o.naam}</div>
+<div style={{ fontSize:12, color:”#6b7280” }}>{o.sets} sets · {o.reps} reps{o.gewicht>0?” · “+o.gewicht+” kg”:””}</div>
+</div>
+<button onClick={()=>updTrain(p.id,datum,l=>l.filter(x=>x.id!==o.id))} style={{ border:“none”, background:“none”, color:”#d1d5db”, fontSize:18, cursor:“pointer” }}>x</button>
+</div>
+))}
+<GroteKnop kleur={p.kleur} onClick={()=>setModal(true)}>+ Oefening toevoegen</GroteKnop>
+{modal && (
+<Overlay><Sheet>
+<ModalHeader titel=“Oefening toevoegen” onSluit={()=>setModal(false)} />
+<div style={{ padding:“16px 18px” }}>
+<Invoer label="Naam" waarde={naam} onChange={setNaam} />
+<Invoer label="Sets" type="number" waarde={sets} onChange={setSets} />
+<Invoer label="Reps" type="number" waarde={reps} onChange={setReps} />
+<Invoer label="Gewicht (kg)" type="number" waarde={gew} onChange={setGew} />
+<GroteKnop kleur={p.kleur} onClick={voegToe}>Toevoegen</GroteKnop>
+</div>
+</Sheet></Overlay>
+)}
+</div>
+);
+}
+
+/* ── PROGRESSIE SCHERM ── */
+function ProgressieScherm({ profiel, progressie, updProg }) {
+const [modal, setModal] = useState(false);
+const [detail, setDetail] = useState(null);
+const [datum, setDatum] = useState(vandaag());
+const [vals, setVals] = useState({});
+const fileRef = useRef(null);
+const [foto, setFoto] = useState(null);
+const p = profiel;
+const entries = progressie[p.id]||[];
+const latest = entries[0];
+const handleFoto = (e) => { const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>setFoto(ev.target.result); r.readAsDataURL(f); };
+const slaOp = () => {
+const entry = { id:Date.now(), datum, foto, …Object.fromEntries(METINGEN.map(m=>[m, vals[m]?Number(vals[m]):null])) };
+updProg(p.id, l => [entry,…l].sort((a,b)=>b.datum.localeCompare(a.datum)));
+setModal(false); setVals({}); setFoto(null);
+};
+return (
+<div style={{ paddingBottom:24 }}>
+{latest && (
+<div style={{ background:“linear-gradient(135deg,”+p.kleur+“18,”+p.kleur+“35)”, borderRadius:16, padding:“16px 18px”, marginBottom:14, border:“1px solid “+p.kleur+“25” }}>
+<div style={{ fontSize:12, fontWeight:700, color:p.kleur, marginBottom:8 }}>Laatste meting — {latest.datum}</div>
+<div style={{ display:“grid”, gridTemplateColumns:“repeat(3,1fr)”, gap:8 }}>
+{METINGEN.filter(m=>latest[m]).map(m => (
+<div key={m} style={{ background:“rgba(255,255,255,0.65)”, borderRadius:10, padding:8, textAlign:“center” }}>
+<div style={{ fontSize:16, fontWeight:800, color:p.kleur }}>{latest[m]}</div>
+<div style={{ fontSize:9, color:”#6b7280” }}>{M_LBL[m]} {M_UNIT[m]}</div>
+</div>
+))}
+</div>
+</div>
+)}
+<GroteKnop kleur={p.kleur} onClick={()=>setModal(true)} stijl={{ marginBottom:16 }}>+ Nieuwe meting</GroteKnop>
+{entries.length===0 && <div style={{ textAlign:“center”, padding:“24px 0”, color:”#9ca3af” }}>Nog geen metingen.</div>}
+{entries.map(e => (
+<div key={e.id} onClick={()=>setDetail(e)} style={{ background:”#fff”, borderRadius:14, padding:“14px 16px”, marginBottom:8, boxShadow:“0 1px 4px rgba(0,0,0,0.06)”, cursor:“pointer”, display:“flex”, alignItems:“center”, gap:12 }}>
+{e.foto && <img src={e.foto} alt=”” style={{ width:52, height:52, objectFit:“cover”, borderRadius:10, flexShrink:0 }} />}
+<div style={{ flex:1 }}>
+<div style={{ fontSize:14, fontWeight:700 }}>{e.datum}</div>
+<div style={{ fontSize:11, color:”#6b7280”, overflow:“hidden”, textOverflow:“ellipsis”, whiteSpace:“nowrap” }}>{METINGEN.filter(m=>e[m]).map(m=>M_LBL[m]+”: “+e[m]+M_UNIT[m]).join(” · “)}</div>
+</div>
+</div>
+))}
+{modal && (
+<Overlay><Sheet>
+<ModalHeader titel=“Nieuwe meting” onSluit={()=>setModal(false)} />
+<div style={{ padding:“16px 18px” }}>
+<Invoer label="Datum" type="date" waarde={datum} onChange={setDatum} />
+{METINGEN.map(m => <Invoer key={m} label={M_LBL[m]+” (”+M_UNIT[m]+”)”} type=“number” waarde={vals[m]||””} onChange={v=>setVals(p=>({…p,[m]:v}))} />)}
+<input ref={fileRef} type=“file” accept=“image/*” onChange={handleFoto} style={{ display:“none” }} />
+<button onClick={()=>fileRef.current.click()} style={{ width:“100%”, background:”#f3f4f6”, border:“1.5px dashed #d1d5db”, borderRadius:10, padding:12, color:”#6b7280”, fontSize:14, cursor:“pointer”, marginTop:8 }}>{foto?“Foto geselecteerd”:“Foto toevoegen”}</button>
+{foto && <img src={foto} alt=”” style={{ width:“100%”, borderRadius:10, marginTop:8, objectFit:“cover”, maxHeight:200 }} />}
+<GroteKnop kleur={p.kleur} onClick={slaOp}>Meting opslaan</GroteKnop>
+</div>
+</Sheet></Overlay>
+)}
+{detail && (
+<Overlay><Sheet>
+<ModalHeader titel={“Meting “+detail.datum} onSluit={()=>setDetail(null)} />
+<div style={{ padding:“16px 18px” }}>
+{detail.foto && <img src={detail.foto} alt=”” style={{ width:“100%”, borderRadius:14, marginBottom:16, objectFit:“cover”, maxHeight:280 }} />}
+<div style={{ display:“grid”, gridTemplateColumns:“repeat(2,1fr)”, gap:10 }}>
+{METINGEN.filter(m=>detail[m]).map(m => (
+<div key={m} style={{ background:p.kleur+“12”, borderRadius:12, padding:12, textAlign:“center” }}>
+<div style={{ fontSize:22, fontWeight:800, color:p.kleur }}>{detail[m]} <span style={{ fontSize:12 }}>{M_UNIT[m]}</span></div>
+<div style={{ fontSize:11, color:”#6b7280” }}>{M_LBL[m]}</div>
+</div>
+))}
+</div>
+<button onClick={()=>{ updProg(p.id,l=>l.filter(e=>e.id!==detail.id)); setDetail(null); }} style={{ width:“100%”, background:”#fee2e2”, color:”#ef4444”, border:“none”, borderRadius:12, padding:12, fontSize:14, fontWeight:700, marginTop:16, cursor:“pointer” }}>Verwijderen</button>
+</div>
+</Sheet></Overlay>
+)}
+</div>
+);
+}
+
+/* ── BOODSCHAPPEN SCHERM ── */
+function BoodschappenScherm({ logs }) {
+const [selProf, setSelProf] = useState([“ferro”,“partner”]);
+const [selDagen, setSelDagen] = useState([vandaag()]);
+const [lijst, setLijst] = useState(null);
+const [afgevinkt, setAfgevinkt] = useState({});
+const d14 = dagen14();
+const genereer = () => {
+const map = {};
+selProf.forEach(pid => selDagen.forEach(dag => {
+const ld = logs[pid+”_”+dag]||{};
+Object.values(ld).reduce((a,b)=>a.concat(b),[]).forEach(i => {
+const k = i.naam.toLowerCase().trim();
+if(map[k]) { map[k].gram += i.gram||0; } else { map[k]={naam:i.naam,gram:i.gram||0}; }
+});
+}));
+setLijst(Object.values(map).sort((a,b)=>a.naam.localeCompare(b.naam)));
+setAfgevinkt({});
+};
+return (
+<div style={{ paddingBottom:24 }}>
+<div style={{ background:”#fff”, borderRadius:16, padding:“14px 16px”, marginBottom:12, boxShadow:“0 1px 4px rgba(0,0,0,0.06)” }}>
+<div style={{ fontSize:13, fontWeight:800, marginBottom:10 }}>Profielen</div>
+<div style={{ display:“flex”, gap:8 }}>
+{PROFIELEN.map(pp => (
+<button key={pp.id} onClick={()=>setSelProf(p=>p.includes(pp.id)?p.filter(x=>x!==pp.id):[…p,pp.id])}
+style={{ flex:1, padding:10, border:“2px solid “+(selProf.includes(pp.id)?pp.kleur:”#e5e7eb”), borderRadius:12, background:selProf.includes(pp.id)?pp.kleur+“18”:”#fff”, fontSize:13, fontWeight:700, color:selProf.includes(pp.id)?pp.kleur:”#9ca3af”, cursor:“pointer” }}>
+{pp.emoji} {pp.naam}
+</button>
+))}
+</div>
+</div>
+<div style={{ background:”#fff”, borderRadius:16, padding:“14px 16px”, marginBottom:14, boxShadow:“0 1px 4px rgba(0,0,0,0.06)” }}>
+<div style={{ fontSize:13, fontWeight:800, marginBottom:10 }}>Dagen</div>
+<div style={{ display:“grid”, gridTemplateColumns:“repeat(7,1fr)”, gap:4 }}>
+{d14.map(d => { const {dag,num}=fmtDag(d); const sel=selDagen.includes(d);
+return <div key={d} onClick={()=>setSelDagen(p=>p.includes(d)?p.filter(x=>x!==d):[…p,d])} style={{ display:“flex”, flexDirection:“column”, alignItems:“center”, gap:2, padding:“6px 2px”, borderRadius:10, background:sel?”#22c55e”:”#f9fafb”, cursor:“pointer” }}>
+<span style={{ fontSize:9, color:sel?”#fff”:”#9ca3af” }}>{dag}</span>
+<span style={{ fontSize:13, fontWeight:700, color:sel?”#fff”:”#374151” }}>{num}</span>
+</div>;
+})}
+</div>
+</div>
+<GroteKnop kleur=”#22c55e” onClick={genereer} stijl={{ marginBottom:16 }}>Genereer boodschappenlijst</GroteKnop>
+{lijst !== null && (
+<div style={{ background:”#fff”, borderRadius:16, padding:“14px 16px”, boxShadow:“0 1px 4px rgba(0,0,0,0.06)” }}>
+<div style={{ display:“flex”, justifyContent:“space-between”, alignItems:“center”, marginBottom:12 }}>
+<span style={{ fontSize:15, fontWeight:800 }}>Boodschappenlijst</span>
+<span style={{ fontSize:12, color:”#9ca3af” }}>{lijst.length} producten</span>
+</div>
+{lijst.length===0 && <p style={{ color:”#9ca3af”, fontSize:13, textAlign:“center” }}>Geen producten gevonden.</p>}
+{lijst.map((item,i) => (
+<div key={i} onClick={()=>setAfgevinkt(a=>({…a,[i]:!a[i]}))} style={{ display:“flex”, alignItems:“center”, gap:12, padding:“10px 0”, borderBottom:“1px solid #f9fafb”, cursor:“pointer” }}>
+<div style={{ width:22, height:22, borderRadius:99, border:“2px solid “+(afgevinkt[i]?”#22c55e”:”#d1d5db”), background:afgevinkt[i]?”#22c55e”:“transparent”, flexShrink:0, display:“flex”, alignItems:“center”, justifyContent:“center” }}>
+{afgevinkt[i] && <svg width="12" height="12" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+</div>
+<div style={{ flex:1 }}>
+<div style={{ fontSize:13, fontWeight:700, color:afgevinkt[i]?”#9ca3af”:”#111827”, textDecoration:afgevinkt[i]?“line-through”:“none” }}>{item.naam}</div>
+<div style={{ fontSize:11, color:”#9ca3af” }}>{item.gram}g totaal</div>
+</div>
+</div>
+))}
+</div>
+)}
+</div>
+);
+}
+
+/* ── HOME SCHERM ── */
+function HomeScherm({ profiel, datum, setDatum, setTab }) {
+const p = profiel;
+const days = week7();
+return (
+<div style={{ paddingBottom:24 }}>
+<div style={{ marginBottom:18 }}>
+<h1 style={{ fontSize:28, fontWeight:900, color:”#111827”, margin:0 }}>Hallo {p.naam} {p.emoji}</h1>
+<p style={{ fontSize:14, color:”#9ca3af”, margin:“4px 0 0” }}>Jouw doelen voor vandaag</p>
+</div>
+<div style={{ background:”#fff”, borderRadius:16, padding:“14px 12px”, marginBottom:16, boxShadow:“0 1px 4px rgba(0,0,0,0.06)” }}>
+<div style={{ display:“flex”, justifyContent:“space-between” }}>
+{days.map(d => {
+const {dag,num}=fmtDag(d); const isSel=d===datum, isVandaag=d===vandaag();
+return (
+<div key={d} onClick={()=>setDatum(d)} style={{ display:“flex”, flexDirection:“column”, alignItems:“center”, gap:3, cursor:“pointer” }}>
+<span style={{ fontSize:10, color:”#9ca3af” }}>{dag}</span>
+<div style={{ width:34, height:34, borderRadius:99, background:isSel?p.kleur:“transparent”, display:“flex”, alignItems:“center”, justifyContent:“center” }}>
+<span style={{ fontSize:14, fontWeight:isSel||isVandaag?800:400, color:isSel?”#fff”:isVandaag?p.kleur:”#374151” }}>{num}</span>
+</div>
+<div style={{ width:4, height:4, borderRadius:99, background:isVandaag?(isSel?”#fff”:p.kleur):“transparent” }}/>
+</div>
+);
+})}
+</div>
+</div>
+<div style={{ display:“grid”, gridTemplateColumns:“1fr 1fr”, gap:10, marginBottom:12 }}>
+{[[“🥗”,“Voeding”,“Dagboek”,“voeding”,”#22c55e”],[“💪”,“Training”,“Workout”,“training”,”#3b82f6”],[“📊”,“Progressie”,“Metingen”,“progressie”,”#f97316”],[“🛒”,“Boodschappen”,“Weeklijst”,“boodschappen”,”#8b5cf6”]].map(arr => (
+<div key={arr[3]} onClick={()=>setTab(arr[3])} style={{ background:”#fff”, borderRadius:16, padding:“16px 14px”, boxShadow:“0 1px 4px rgba(0,0,0,.06)”, cursor:“pointer”, borderTop:“3px solid “+arr[4] }}>
+<div style={{ fontSize:26, marginBottom:6 }}>{arr[0]}</div>
+<div style={{ fontSize:14, fontWeight:800, color:”#111827” }}>{arr[1]}</div>
+<div style={{ fontSize:11, color:”#9ca3af” }}>{arr[2]}</div>
+</div>
+))}
+</div>
+</div>
+);
+}
+
+/* ── MAIN APP ── */
+function FitTracker() {
+const [pidx, setPidx] = useState(0);
+const [tab, setTab] = useState(“home”);
+const [datum, setDatum] = useState(vandaag());
+const [menu, setMenu] = useState(false);
+const { logs, trainingen, progressie, doelen, bibl, klaar, updLog, updTrain, updProg, updDoel, addBibl } = useAppState();
+
+useEffect(() => {
+try {
+let meta = document.querySelector(“meta[name=viewport]”);
+if (!meta) { meta = document.createElement(“meta”); meta.name = “viewport”; document.head.appendChild(meta); }
+meta.content = “width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no”;
+} catch(e) {}
+}, []);
+
+const p = PROFIELEN[pidx];
+const TITELS = { home:“Dashboard”, voeding:“Voedingslog”, training:“Training”, progressie:“Progressie”, boodschappen:“Boodschappen” };
+const NAV = [{ id:“home”,ic:“🏠”,lb:“Home” },{ id:“voeding”,ic:“🥗”,lb:“Voeding” },{ id:“training”,ic:“💪”,lb:“Training” },{ id:“progressie”,ic:“📊”,lb:“Progressie” },{ id:“boodschappen”,ic:“🛒”,lb:“Lijst” }];
+
+if (!klaar) return (
+<div style={{ display:“flex”, alignItems:“center”, justifyContent:“center”, height:“100vh”, background:”#f3f4f6”, flexDirection:“column”, gap:12 }}>
+<div style={{ fontSize:36 }}>🏋️</div>
+<div style={{ fontSize:16, fontWeight:700, color:”#6b7280” }}>FitTracker laden…</div>
+</div>
+);
+
+return (
+<div style={{ maxWidth:430, margin:“0 auto”, minHeight:“100vh”, background:”#f3f4f6”, position:“relative”, overflowX:“hidden”, width:“100%” }}>
+<style>{`* { box-sizing: border-box !important; } body, html { overflow-x: hidden !important; } input, select, textarea { font-size: 16px !important; }`}</style>
+
+```
+  {/* HEADER */}
+  <div style={{ background:"#fff", padding:"14px 20px 12px", boxShadow:"0 1px 3px rgba(0,0,0,.06)", position:"sticky", top:0, zIndex:50, overflowX:"hidden" }}>
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+      <div>
+        <div style={{ fontSize:10, color:"#9ca3af", fontWeight:700, letterSpacing:1.5, textTransform:"uppercase" }}>FitTracker</div>
+        <div style={{ fontSize:19, fontWeight:900, color:"#111827", lineHeight:1.2 }}>{TITELS[tab]}</div>
+      </div>
+      <button onClick={()=>setMenu(!menu)} style={{ display:"flex", alignItems:"center", gap:7, background:p.kleur+"18", border:"1.5px solid "+p.kleur+"50", borderRadius:99, padding:"6px 14px", cursor:"pointer" }}>
+        <span style={{ fontSize:16 }}>{p.emoji}</span>
+        <span style={{ fontSize:12, fontWeight:800, color:p.kleur }}>{p.naam}</span>
+        <span style={{ color:p.kleur, display:"flex", alignItems:"center" }}><svg width="10" height="6" viewBox="0 0 10 6"><polyline points="1,1 5,5 9,1" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+      </button>
+    </div>
+  </div>
+
+  {/* PROFIEL MENU */}
+  {menu && (
+    <div>
+      <div style={{ position:"fixed", inset:0, zIndex:55 }} onClick={()=>setMenu(false)} />
+      <div style={{ position:"absolute", right:16, top:68, background:"#fff", borderRadius:14, boxShadow:"0 8px 28px rgba(0,0,0,.13)", zIndex:60, overflow:"hidden", minWidth:170 }}>
+        {PROFIELEN.map((pr,i) => (
+          <div key={pr.id} onClick={()=>{ setPidx(i); setMenu(false); }} style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 16px", cursor:"pointer", background:i===pidx?pr.kleur+"12":"#fff", borderBottom:i<PROFIELEN.length-1?"1px solid #f3f4f6":"none" }}>
+            <span style={{ fontSize:20 }}>{pr.emoji}</span>
+            <span style={{ fontSize:14, fontWeight:700, color:i===pidx?pr.kleur:"#374151" }}>{pr.naam}</span>
+            {i===pidx && <span style={{ color:pr.kleur, marginLeft:"auto", display:"flex" }}><svg width="14" height="14" viewBox="0 0 14 14"><polyline points="2,7 6,11 12,3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg></span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  )}
+
+  {/* CONTENT */}
+  <div style={{ padding:"16px 14px 90px", overflowX:"hidden", boxSizing:"border-box" }}>
+    {tab==="home" && <HomeScherm profiel={p} datum={datum} setDatum={setDatum} setTab={setTab} />}
+    {tab==="voeding" && <VoedingScherm profiel={p} datum={datum} logs={logs} updLog={updLog} doelen={doelen} updDoel={updDoel} bibl={bibl} addBibl={addBibl} />}
+    {tab==="training" && <TrainingScherm profiel={p} datum={datum} trainingen={trainingen} updTrain={updTrain} />}
+    {tab==="progressie" && <ProgressieScherm profiel={p} progressie={progressie} updProg={updProg} />}
+    {tab==="boodschappen" && <BoodschappenScherm logs={logs} />}
+  </div>
+
+  {/* NAV BAR */}
+  <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:430, background:"#fff", borderTop:"1px solid #f3f4f6", display:"flex", zIndex:50 }}>
+    {NAV.map(n => (
+      <button key={n.id} onClick={()=>setTab(n.id)} style={{ flex:1, padding:"10px 0 14px", border:"none", background:"transparent", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
+        <span style={{ fontSize:19 }}>{n.ic}</span>
+        <span style={{ fontSize:9, fontWeight:700, color:tab===n.id?p.kleur:"#c4c4c4" }}>{n.lb}</span>
+        {tab===n.id && <div style={{ width:4, height:4, borderRadius:99, background:p.kleur }} />}
+      </button>
+    ))}
+  </div>
+</div>
+```
+
+);
+}
+
+ReactDOM.createRoot(document.getElementById(“root”)).render(React.createElement(FitTracker));
+
+  </script>
+</body>
+</html>
